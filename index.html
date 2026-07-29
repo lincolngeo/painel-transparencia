@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Painel de Transparência — Recursos de Resposta a Desastres | Defesa Civil</title>
+<meta name="theme-color" content="#272F68">
+<link rel="icon" type="image/png" href="img/icon-192.png">
+<link rel="stylesheet" href="libs/leaflet.css">
+<link rel="stylesheet" href="css/estilo.css?v=15">
+</head>
+<body>
+
+<div class="topo">
+<header>
+  <div class="marca-placa">
+    <img src="img/marca_defesa_civil_quadrada.png" alt="Defesa Civil Brasil">
+  </div>
+  <div class="titwrap">
+    <h1>Painel de Transparência — Recursos de Resposta a Desastres</h1>
+    <div class="sub" id="subTit">Acompanhamento dos recursos federais repassados pela SEDEC ·
+      ações de resposta · recorte 2026</div>
+  </div>
+  <nav>
+    <a class="ativo" href="#" id="navResp">Resposta</a>
+    <a class="desativado" href="#" id="navRecon" title="Em avaliação para inclusão">Reconstrução <span class="tag-breve">em breve</span></a>
+    <a href="#" id="navSobre">Sobre</a>
+  </nav>
+</header>
+
+<!-- barra de filtros -->
+<div class="filtros" id="filtros">
+  <div class="fgrupo">
+    <label>Ano (abertura do protocolo)</label>
+    <div class="seg wrap" id="fAno"></div>
+  </div>
+  <div class="fgrupo">
+    <label>Período por data</label>
+    <div class="periodo">
+      <input type="date" id="fDini" title="Data inicial (abertura do protocolo)">
+      <span class="psep">—</span>
+      <input type="date" id="fDfim" title="Data final (abertura do protocolo)">
+      <button class="btn-limpar" id="btnPeriodoX" title="Limpar período" style="padding:6px 9px">×</button>
+    </div>
+  </div>
+  <div class="fgrupo">
+    <label>Região</label>
+    <div class="seg" id="fRegiao">
+      <button data-v="" class="on">Todas</button>
+      <button data-v="Norte">N</button><button data-v="Nordeste">NE</button>
+      <button data-v="Centro-Oeste">CO</button><button data-v="Sudeste">SE</button>
+      <button data-v="Sul">S</button>
+    </div>
+  </div>
+  <div class="fgrupo">
+    <label>UF</label>
+    <select id="fUF"><option value="">Todas</option></select>
+  </div>
+  <div class="fgrupo fgrupo-busca">
+    <label>Buscar município</label>
+    <div class="busca">
+      <input id="fBuscaMun" type="search" placeholder="digite o nome…" autocomplete="off">
+      <div class="busca-res" id="buscaRes"></div>
+    </div>
+  </div>
+  <div class="fgrupo">
+    <label>Fase da ação</label>
+    <div class="seg" id="fFase">
+      <button data-v="" class="on">Todas</button>
+      <button data-v="Socorro e Assistência">Socorro/Assist.</button>
+      <button data-v="Restabelecimento">Restabelec.</button>
+      <button data-v="__sem__" title="Processos que não avançaram até solicitação/liberação">Não inform.</button>
+    </div>
+  </div>
+  <div class="fgrupo">
+    <label>Finalidade</label>
+    <select id="fFin"><option value="">Todas</option>
+      <option value="Custeio (corrente)">Custeio (corrente)</option>
+      <option value="Investimento (capital)">Investimento (capital)</option>
+    </select>
+  </div>
+  <div class="fgrupo">
+    <label>Tipo de desastre</label>
+    <select id="fDes"><option value="">Todos</option></select>
+  </div>
+  <div class="fgrupo fgrupo-acoes">
+    <button class="btn-limpar" id="btnLimpar" title="Limpar todos os filtros">Limpar</button>
+    <div class="exp-wrap">
+      <button class="btn-exp" id="btnExp">Exportar ▾</button>
+      <div class="exp-menu" id="expMenu">
+        <button data-t="pdf">Relatório (PDF)</button>
+        <button data-t="csv">Dados filtrados (CSV)</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- migalha do recorte + filtros aplicados (fica na porção congelada do topo) -->
+<div class="recorte-bar" id="recorteBar">
+  <span id="recorteTxt"><b>Brasil</b> · todos os processos</span>
+  <span class="recorte-chips" id="recorteChips"></span>
+</div>
+</div><!-- /topo -->
+
+<!-- cabeçalho e quadro de destaque só do relatório PDF (ocultos na tela) -->
+<div class="print-head" id="printHead"></div>
+<div class="print-destaque" id="printDestaque"></div>
+
+<div class="corpo">
+  <!-- COLUNA PRINCIPAL: dashboard -->
+  <main class="dash" id="dash">
+    <section class="kpis" id="kpis"></section>
+
+    <div class="grid-cards">
+      <div class="card card-funil" id="cardFunil">
+        <div class="card-h"><h3>Funil de admissibilidade dos processos</h3>
+          <span class="card-hint">clique numa etapa para filtrar</span></div>
+        <div class="funil" id="funil"></div>
+        <div class="dica" id="dicaFunil"></div>
+      </div>
+
+      <div class="card card-larga" id="cardTempo">
+        <div class="card-h"><h3 id="tituloTempo">Evolução mensal</h3>
+          <span class="card-hint">solicitações do ente × recursos liberados</span></div>
+        <div class="ech" id="chartTempo" style="height:210px"></div>
+      </div>
+
+      <div class="card" id="cardUF">
+        <div class="card-h"><h3 id="tituloUF">Recursos por Unidade da Federação</h3>
+          <div class="seg mini" id="metUF">
+            <button data-v="vlib" class="on">R$ liberado</button>
+            <button data-v="n">Nº processos</button>
+          </div></div>
+        <div class="ech-scroll" id="ufScroll"><div id="chartUF"></div></div>
+        <div class="dica" id="dicaUF"></div>
+      </div>
+
+      <div class="card" id="cardPrazos">
+        <div class="card-h"><h3>Desempenho de prazos (dias)</h3>
+          <span class="card-hint">mediana + p90 · referência legal 90d</span></div>
+        <div class="ech" id="chartPrazos"></div>
+        <div class="dica" id="dicaPrazos"></div>
+      </div>
+
+      <div class="card" id="cardSit">
+        <div class="card-h"><h3>Situação dos processos</h3></div>
+        <div class="ech" id="chartSit"></div>
+      </div>
+
+      <div class="card" id="cardDevol">
+        <div class="card-h"><h3 id="tituloDevol">Dificuldade do ente</h3>
+          <span class="card-hint">% não avançou · % indeferido</span></div>
+        <div class="ech-scroll" id="devolScroll"><div id="chartDevol"></div></div>
+        <div class="dica" id="dicaDevol"></div>
+      </div>
+
+      <div class="card card-larga" id="cardDes">
+        <div class="card-h"><h3>Processos e recursos por tipo de desastre</h3></div>
+        <div class="ech" id="chartDes"></div>
+      </div>
+    </div>
+  </main>
+
+  <!-- COLUNA AUXILIAR: mapa + ranking + detalhe -->
+  <aside class="lateral" id="lateral">
+    <div class="card card-mapa">
+      <div class="card-h">
+        <h3 id="tituloMapa">Distribuição geográfica</h3>
+        <div class="seg mini" id="metMapa">
+          <button data-v="vlib" class="on">R$</button>
+          <button data-v="n">Nº</button>
+          <button data-v="taxa">% acesso</button>
+          <button data-v="dific">dificuldade</button>
+        </div>
+      </div>
+      <div id="mapa"><div class="load" id="load"><span>Carregando…</span></div></div>
+      <div class="mapa-leg" id="mapaLeg"></div>
+    </div>
+
+    <div class="card card-narr" id="cardNarr">
+      <h3 id="narrTit">Síntese</h3>
+      <div class="narr" id="narr"></div>
+    </div>
+
+    <div class="card" id="cardDestaques">
+      <div class="card-h"><h3 id="destTit">Destaques do recorte</h3></div>
+      <div class="destaques" id="destaques"></div>
+    </div>
+  </aside>
+</div>
+
+<!-- TABELÃO — detalhamento completo, reage a todos os filtros -->
+<section class="tabelao">
+  <div class="card">
+    <div class="card-h tab-h">
+      <h3>Detalhamento — processos do recorte selecionado</h3>
+      <div class="tab-busca">
+        <input id="fBuscaTab" type="search" placeholder="buscar protocolo, processo ou município…" autocomplete="off">
+      </div>
+    </div>
+    <div class="tab-info" id="tabelaInfo"></div>
+    <div class="tabela-wrap">
+      <table class="tab"><thead id="tabelaHead"></thead><tbody id="tabelaBody"></tbody></table>
+    </div>
+  </div>
+</section>
+
+<div class="rodape" id="rodape"></div>
+
+<!-- modal (Sobre & TCU / detalhe) -->
+<div class="modal-fundo" id="modalFundo">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="modal-tit" id="modalTit">—</div>
+      <button class="modal-x" id="modalFechar" title="Fechar">×</button>
+    </div>
+    <div class="modal-corpo" id="modalCorpo"></div>
+  </div>
+</div>
+
+<script src="libs/leaflet.js"></script>
+<script src="libs/echarts.min.js"></script>
+<script src="libs/fflate.min.js"></script>
+<script src="js/app.js?v=18"></script>
+</body>
+</html>
