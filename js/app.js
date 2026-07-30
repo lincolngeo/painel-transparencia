@@ -239,9 +239,9 @@ function funil(f){
   });
   var ocp=(META.n_ocp)||0;
   document.getElementById('dicaFunil').innerHTML=
-    'Leitura neutra/diagnóstica. <b>Rascunho</b> e <b>excluído pelo ente</b> (muitos sem nº de '+
-    'processo) sinalizam dificuldade do município em cadastrar/levar adiante a solicitação. '+
-    '<b>Indeferido</b> é decisão da SEDEC. '+
+    'Leitura neutra/diagnóstica. <b>Rascunho</b> e <b>excluído pelo ente</b> (quando o ente só salva '+
+    'ou exclui, não são gerados números de protocolos) sinalizam dificuldade do município em '+
+    'cadastrar/levar adiante a solicitação. <b>Indeferido</b> é decisão da SEDEC. '+
     (ocp? '<br><i>OCP ('+nfmt(ocp)+'): Operação Carro Pipa, encaminhada ao Exército — entra na '+
       'contagem, mas fica fora dos indicadores financeiros.</i>':'');
 }
@@ -474,7 +474,9 @@ function iniciaMapa(){
     {maxZoom:19,subdomains:'abcd',attribution:'© OpenStreetMap · © CARTO'});
   var sem=L.layerGroup();
   basemaps={'Satélite (online)':esri,'Ruas (online)':ruas,'Claro (online)':claro,'Sem fundo (offline)':sem};
-  mapa=L.map('mapa',{zoomControl:false,attributionControl:true,preferCanvas:true,
+  // SVG (sem preferCanvas): 27 UFs ou os municípios de 1 UF — leve, e mantém o
+  // cursor de mão (.leaflet-interactive:hover) e o hover crisp por feição.
+  mapa=L.map('mapa',{zoomControl:false,attributionControl:true,
     minZoom:3,maxZoom:11,layers:[esri]}).setView([-15.3,-53],3.4);
   mapa.attributionControl.setPrefix('S2iD/SEDEC · IBGE');
   L.control.layers(basemaps,null,{position:'topright',collapsed:true}).addTo(mapa);
@@ -721,27 +723,47 @@ function abreModal(tit,html){
 function fechaModal(){ document.getElementById('modalFundo').classList.remove('on'); }
 function modalSobre(){
   var N=META.notas||{};
+  var leg='https://www.gov.br/mdr/pt-br/acesso-a-informacao/legislacao/secretaria-nacional-de-protecao-e-defesa-civil/legislacao';
   var h='<h4>O que é este painel</h4>'+
-    '<p>Painel público de transparência da <b>SEDEC/MIDR</b> sobre os recursos e processos '+
-    'federais das <b>ações de resposta a desastres</b> (socorro, assistência e restabelecimento). '+
-    'Reúne, num só lugar, quanto foi solicitado e liberado, para quais municípios, em que fase e '+
-    'com que desfecho — permitindo o acompanhamento e o controle social de forma direta.</p>'+
-    '<h4>O que você encontra aqui</h4>'+
-    '<p>Filtros por região, UF, município (busca), fase da ação, finalidade e situação; um funil que '+
-    'mostra o caminho do pleito (do rascunho ao recurso transferido); indicadores de recurso liberado, '+
-    'acesso ao recurso, dificuldade do ente e prazos (do município e da SEDEC); evolução mensal; mapa '+
-    'por UF e município; e um detalhamento completo, tudo <b>exportável</b> (CSV e relatório PDF) no '+
-    'recorte selecionado.</p>'+
+    '<p>Painel público de transparência da <b>Secretaria Nacional de Proteção e Defesa Civil '+
+    '(SEDEC/MIDR)</b> sobre os recursos e processos federais de proteção e defesa civil registrados '+
+    'no <b>Sistema Integrado de Informações sobre Desastres (S2iD)</b>. Reúne, num só lugar, o que foi '+
+    'solicitado e liberado, para quais entes, em que fase e com que desfecho — para '+
+    '<b>transparência e controle social</b>.</p>'+
+    '<h4>As três frentes das ações federais de defesa civil</h4>'+
+    '<p>Após um desastre, o apoio federal ao ente segue um fluxo, todo registrado no S2iD:</p>'+
+    '<div class="tcu-item"><b>1. Reconhecimento federal</b> — ato inicial: o município/estado declara '+
+    'situação de emergência ou estado de calamidade pública e solicita à União o reconhecimento, que '+
+    'habilita o acesso a recursos e medidas federais. <i>(frente em elaboração)</i></div>'+
+    '<div class="tcu-item"><b>2. Ações de resposta</b> — socorro, assistência às vítimas e '+
+    'restabelecimento dos serviços essenciais. <b>É o recorte deste piloto.</b></div>'+
+    '<div class="tcu-item"><b>3. Ações de reconstrução</b> — recuperação da infraestrutura pública '+
+    'danificada ou destruída. <i>(frente em elaboração)</i></div>'+
+    '<p>Este piloto cobre as <b>ações de resposta</b> (área de origem do trabalho); as demais frentes '+
+    'serão incorporadas para que o painel reflita todas as ações da SEDEC.</p>'+
+    '<h4>Base legal e normativa</h4>'+
+    '<p>A SEDEC é o <b>órgão central do Sistema Nacional de Proteção e Defesa Civil (SINPDEC)</b>. '+
+    'O aparato principal: <b>Lei nº 12.608/2012</b> (Política Nacional de Proteção e Defesa Civil e o '+
+    'Plano Nacional de Proteção e Defesa Civil — PNPDC 2025–2035); <b>Lei nº 12.340/2010</b> '+
+    '(transferências de recursos federais para resposta e reconstrução); <b>Decreto nº 10.593/2020</b> '+
+    '(organização do SINPDEC e procedimentos) e as portarias e instruções normativas da SEDEC que '+
+    'disciplinam o reconhecimento federal e a execução dos recursos. Legislação completa: '+
+    '<a href="'+leg+'" target="_blank" rel="noopener">portal de legislação da SEDEC</a>.</p>'+
+    '<h4>Transparência e controle social</h4>'+
+    '<p>Fundamenta-se no princípio constitucional da <b>publicidade</b> (art. 37 da Constituição) e na '+
+    '<b>Lei de Acesso à Informação (Lei nº 12.527/2011)</b>: sendo públicos, os dados de execução '+
+    'devem ser acessíveis e rastreáveis, viabilizando o acompanhamento pelos órgãos de controle e o '+
+    'controle social pela população.</p>'+
     '<h4>Como ler as situações</h4>'+
     '<p>Leitura <b>neutra e diagnóstica</b>. <b>Rascunho</b> (salvo, nunca enviado) e <b>excluído pelo '+
-    'ente</b> sinalizam dificuldade do município em cadastrar/levar adiante o pedido — muitos sequer '+
-    'geram número de processo. <b>Indeferido</b> é decisão da SEDEC; <b>devolvido ao ente</b> aguarda '+
-    'ajustes que, se sanados, permitem prosseguir.</p>'+
+    'ente</b> sinalizam dificuldade do município em cadastrar/levar adiante o pedido — quando o ente '+
+    'apenas salva ou exclui, e não são gerados números de protocolos. <b>Indeferido</b> é decisão da '+
+    'SEDEC; <b>devolvido ao ente</b> aguarda ajustes que, se sanados, permitem prosseguir.</p>'+
     (N.ocp? '<h4>Operação Carro Pipa (OCP)</h4><div class="tcu-item">'+N.ocp+'</div>':'')+
     (N.finalidade? '<h4>Finalidade (custeio × investimento)</h4><p>'+N.finalidade+'</p>':'')+
-    (N.dificuldade? '<h4>Dificuldade do ente</h4><p>'+N.dificuldade+'</p>':'')+
     (N.revisoes? '<p style="color:#8A9099;font-size:12px">'+N.revisoes+'</p>':'')+
-    '<h4>Fonte e data</h4><p>'+META.fonte+'<br>Recorte: '+META.recorte+'<br>'+
+    '<h4>Fonte e data</h4><p>'+META.fonte+'<br>Recorte deste piloto: '+META.recorte+'<br>'+
+    '<b>Reconhecimento federal</b> e <b>ações de reconstrução</b> estão em fase de elaboração.<br>'+
     'Consolidação gerada em '+dbr(META.data_geracao)+'.</p>'+
     '<p style="margin-top:14px;color:#8A9099;font-size:12px">Elaboração: Lincoln Duques de Barros — '+
     'Analista de Infraestrutura — SEDEC/MIDR. Protótipo em avaliação. Dados públicos.</p>';
@@ -969,6 +991,7 @@ function ligaEventos(){
     expM.classList.remove('on'); if(b.getAttribute('data-t')==='csv')exportaCSV(); else exportaPDF(); }; });
   document.getElementById('navSobre').onclick=function(e){e.preventDefault();modalSobre();};
   document.getElementById('navRecon').onclick=function(e){e.preventDefault();};
+  document.getElementById('navReconhec').onclick=function(e){e.preventDefault();};
   document.getElementById('modalFechar').onclick=fechaModal;
   document.getElementById('modalFundo').onclick=function(e){ if(e.target===this) fechaModal(); };
   document.addEventListener('keydown',function(e){ if(e.key==='Escape') fechaModal(); });

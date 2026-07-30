@@ -35,6 +35,9 @@ header{background:var(--navy);color:#fff;display:flex;align-items:center;gap:16p
 header .titwrap{flex:1 1 auto;min-width:0}
 header h1{font-size:18px;font-weight:700;margin:0;line-height:1.15;letter-spacing:.2px}
 header .sub{font-size:12px;font-weight:300;color:#C7CCE4;margin-top:3px}
+.autoria-topo{font-size:11.5px;color:#C7CCE4;margin-top:5px;padding-left:9px;
+  border-left:3px solid var(--laranja);line-height:1.3}
+.autoria-topo b{color:#fff;font-weight:700}
 header nav{display:flex;gap:4px;flex:0 0 auto}
 header nav a{color:#C7CCE4;text-decoration:none;font-size:12.5px;font-weight:500;
   padding:6px 12px;border-radius:6px;display:flex;align-items:center;gap:6px}
@@ -178,9 +181,13 @@ select:focus{outline:2px solid var(--laranja);outline-offset:-1px;background:#ff
 .ctl-btn svg{width:18px;height:18px;vertical-align:middle}
 .ctl-norte{width:30px;height:30px;background:#fff;padding:3px}
 .ctl-norte svg{width:100%;height:100%}
-.exp-ctl{position:relative}
+/* o container top-right do Leaflet e o bottom-right (atribuição) têm z-index 1000;
+   como o bottom-right é criado depois, ele pinta por cima. Sobe o top-right p/ o
+   painel de exportação ficar acima do texto de fontes/atribuição do mapa. */
+.leaflet-top.leaflet-right{z-index:1100}
+.exp-ctl{position:relative;z-index:1200}   /* acima dos demais controles do mapa */
 .exp-panel{display:none;position:absolute;top:0;right:30px;background:#fff;border-radius:10px;
-  box-shadow:0 6px 24px rgba(20,25,50,.28);border:1px solid var(--linha);padding:7px;min-width:210px;z-index:1000}
+  box-shadow:0 6px 24px rgba(20,25,50,.28);border:1px solid var(--linha);padding:7px;min-width:210px;z-index:2000}
 /* abre no hover (como o controle de camadas) e fecha ao sair */
 .exp-ctl:hover .exp-panel, .exp-panel:hover{display:block}
 .exp-panel .exp-tit{font-size:11px;color:var(--cinza);font-weight:700;padding:3px 8px 6px;
@@ -285,7 +292,11 @@ table.tab td:nth-child(3){font-weight:500;color:var(--navy)}
 .print-destaque{display:none}
 @media print{
   @page{margin:11mm}
-  header{position:static}
+  /* o topo é sticky na tela — precisa virar estático no papel (senão o cabeçalho
+     fica flutuando por cima do mapa/conteúdo) */
+  .topo{position:static!important;box-shadow:none}
+  header{position:static;padding:10px 16px}
+  header h1{font-size:15px} header .sub{display:none}
   nav,.filtros,.exp-wrap,.card-hint,.seg.mini,.recorte-bar,.rol-pag{display:none!important}
   /* relatório sintético: sem planilha, listas longas, mapa interativo nem síntese solta */
   .tabelao,.card-mapa,.card-narr,#cardUF,#cardDevol,#cardDes,#cardDestaques{display:none!important}
@@ -299,7 +310,7 @@ table.tab td:nth-child(3){font-weight:500;color:var(--navy)}
     display:flex;flex-direction:column}
   .pd-maptit{font-size:12.5px;font-weight:700;color:var(--navy);margin:0 0 6px;
     border-bottom:1px solid var(--linha);padding-bottom:5px}
-  .pd-mapwrap svg{width:100%;height:auto;max-height:340px;display:block;flex:1 1 auto}
+  .pd-mapwrap svg{width:100%;height:auto;max-height:300px;display:block;flex:1 1 auto}
   .pd-mapcap{font-size:9px;color:#5B6068;text-align:center;text-transform:uppercase;
     letter-spacing:.3px;margin-top:6px}
   .pd-sintese{border:1px solid var(--linha);border-radius:10px;padding:14px 16px}
@@ -311,13 +322,15 @@ table.tab td:nth-child(3){font-weight:500;color:var(--navy)}
   .pd-dest .dest-item{padding:5px 2px}
   .pd-dest .dest-ic{width:24px;height:24px;font-size:13px}
   .pd-dest .dest-nome{font-size:12px} .pd-dest .dest-val{font-size:12px}
-  .lateral{position:static} .corpo{grid-template-columns:1fr;padding:6px 0 0}
-  .kpis{grid-template-columns:repeat(6,1fr);gap:12px;margin-bottom:16px}
-  .grid-cards{grid-template-columns:1fr 1fr;gap:16px}
-  .card,.kpi{box-shadow:none;border:1px solid var(--linha);break-inside:avoid}
-  .kpi{padding:14px 15px}
-  .ech{height:250px!important}
-  .dica{margin-top:14px!important;line-height:1.55}
+  .lateral{position:static;max-height:none;overflow:visible} .corpo{grid-template-columns:1fr;padding:8px 0 0}
+  .kpis{grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:14px}
+  .kpi{padding:11px 12px;border-left-width:3px}
+  .kpi .v{font-size:17px} .kpi .r{font-size:9.5px} .kpi .sub{font-size:9.5px}
+  .grid-cards{grid-template-columns:1fr 1fr;gap:14px}
+  .card{box-shadow:none;border:1px solid var(--linha);break-inside:avoid;padding:11px 13px}
+  .card h3{font-size:11px}
+  .ech{height:230px!important}
+  .dica{margin-top:12px!important;line-height:1.5;font-size:10px}
   body{background:#fff}
 }
 
