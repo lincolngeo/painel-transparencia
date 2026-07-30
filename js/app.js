@@ -522,9 +522,9 @@ function addExportMapa(pos){
     return d; }});
   new C().addTo(mapa);
   var tog=document.getElementById('btnExpMapa'), pan=document.getElementById('expMapaPanel');
-  L.DomEvent.on(tog,'click',function(e){ L.DomEvent.stop(e); });   // hover abre; clique não navega
+  L.DomEvent.on(tog,'click',function(e){ L.DomEvent.stop(e); pan.classList.toggle('on'); });  // toque/clique (mobile); hover no desktop
   pan.querySelectorAll('button').forEach(function(b){ b.onclick=function(){
-    exportaGeo(b.getAttribute('data-g')); }; });
+    pan.classList.remove('on'); exportaGeo(b.getAttribute('data-g')); }; });
 }
 function ehPct(met){ return met==='taxa'||met==='dific'; }
 function rampaDe(met){ return met==='taxa'?RAMPA_VERDE : met==='dific'?RAMPA_VERM : RAMPA_NAVY; }
