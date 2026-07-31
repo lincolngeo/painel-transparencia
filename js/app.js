@@ -530,8 +530,27 @@ function addNorte(pos){
     return d; }});
   new C().addTo(mapa);
 }
+/* Limite leste do Brasil continental (Ponta do Seixas/PB ≈ -34,79°). Coordenadas
+   a leste disto são ilhas oceânicas do Atlântico — Trindade (município de Vitória/ES,
+   ~1.160 km da costa), Fernando de Noronha, Atol das Rocas, Martin Vaz. Se entrarem no
+   enquadramento, esticam o mapa e encolhem o recorte continental. */
+var LON_CONTINENTAL=-34.0;
+/* limites (L.latLngBounds) só da porção continental de um GeoJSON, ignorando ilhas oceânicas */
+function boundsContinental(geo){
+  var minLat=Infinity,minLng=Infinity,maxLat=-Infinity,maxLng=-Infinity,achou=false;
+  function pt(p){ if(p[0]>LON_CONTINENTAL) return; achou=true;
+    if(p[1]<minLat)minLat=p[1]; if(p[1]>maxLat)maxLat=p[1];
+    if(p[0]<minLng)minLng=p[0]; if(p[0]>maxLng)maxLng=p[0]; }
+  function walk(g){ if(!g)return; if(typeof g[0]==='number'){pt(g);return;} for(var i=0;i<g.length;i++)walk(g[i]); }
+  var fs=(geo&&geo.features)?geo.features:(geo?[geo]:[]);
+  fs.forEach(function(ft){ walk(ft.geometry&&ft.geometry.coordinates); });
+  if(!achou) return null;
+  return L.latLngBounds([[minLat,minLng],[maxLat,maxLng]]);
+}
 function reenquadraMapa(){
-  if(S.uf && camadaMun){ try{ mapa.fitBounds(camadaMun.getBounds(),{padding:[10,10]}); return; }catch(e){} }
+  if(S.uf && camadaMun){ try{
+    var b=(munCacheGeo[S.uf]&&boundsContinental(munCacheGeo[S.uf]))||camadaMun.getBounds();
+    mapa.fitBounds(b,{padding:[10,10]}); return; }catch(e){} }
   mapa.setView([-15.3,-53],3.4);
 }
 function addExportMapa(pos){
@@ -627,7 +646,7 @@ function pintaMun(f,met,reenquadra){
         ly.on('click',function(){ if(o) setFiltro('mun', ft.properties.cd); });
       }
     }).addTo(mapa);
-    if(reenquadra){ try{ mapa.fitBounds(camadaMun.getBounds(),{padding:[10,10]}); }catch(e){} }
+    if(reenquadra){ try{ mapa.fitBounds(boundsContinental(geo)||camadaMun.getBounds(),{padding:[10,10]}); }catch(e){} }
     legenda(max,met);
   }
   if(munCacheGeo[uf]) desenha(munCacheGeo[uf]);
@@ -825,13 +844,15 @@ function svgMapa(f){
     if(t==='Polygon') c.forEach(function(r){r.forEach(cb);});
     else if(t==='MultiPolygon') c.forEach(function(p){p.forEach(function(r){r.forEach(cb);});}); }
   feats.forEach(function(ft){ each(ft.geometry,function(p){
+    if(p[0]>LON_CONTINENTAL) return;   // ignora ilhas oceânicas (Trindade/ES etc.) no enquadramento
     if(p[0]<minx)minx=p[0]; if(p[0]>maxx)maxx=p[0]; if(p[1]<miny)miny=p[1]; if(p[1]>maxy)maxy=p[1]; }); });
   var kx=Math.cos((miny+maxy)/2*Math.PI/180), W=620;
   var spanx=(maxx-minx)*kx||1, spany=(maxy-miny)||1, H=W*spany/spanx;
   function X(lon){ return ((lon-minx)*kx/spanx*W); }
   function Y(lat){ return ((maxy-lat)/spany*H); }
   function d(g){ var s='';
-    function ring(r){ r.forEach(function(p,i){ s+=(i?'L':'M')+X(p[0]).toFixed(1)+' '+Y(p[1]).toFixed(1)+' '; }); s+='Z '; }
+    function ring(r){ if(r.every(function(p){return p[0]>LON_CONTINENTAL;})) return;  // não desenha ilha oceânica
+      r.forEach(function(p,i){ s+=(i?'L':'M')+X(p[0]).toFixed(1)+' '+Y(p[1]).toFixed(1)+' '; }); s+='Z '; }
     if(g.type==='Polygon') g.coordinates.forEach(ring);
     else if(g.type==='MultiPolygon') g.coordinates.forEach(function(p){p.forEach(ring);});
     return s; }
