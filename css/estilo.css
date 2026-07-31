@@ -124,7 +124,7 @@ select:focus{outline:2px solid var(--laranja);outline-offset:-1px;background:#ff
   max-height:max(360px, calc(100vh - var(--topo-h,150px) - 24px));overflow-y:auto;overflow-x:hidden}
 .card-narr{order:1} #cardDestaques{order:2} .card-mapa{order:3}
 
-.card{background:#fff;border-radius:12px;box-shadow:var(--sombra);padding:13px 15px;position:relative}
+.card{background:#fff;border-radius:12px;box-shadow:var(--sombra);padding:13px 15px;position:relative;min-width:0}
 /* setas de rolagem internas (painéis com rolagem própria: ranking, dificuldade, tabelão) */
 .scroll-int{position:absolute;right:9px;width:30px;height:30px;border-radius:50%;border:0;
   background:var(--navy);color:#fff;font-size:15px;line-height:1;cursor:pointer;display:none;
@@ -148,7 +148,7 @@ select:focus{outline:2px solid var(--laranja);outline-offset:-1px;background:#ff
   text-transform:uppercase;letter-spacing:.5px}
 .card-hint{font-size:10.5px;color:var(--cinza-cl);font-weight:500}
 .dica{font-size:11px;color:var(--cinza);line-height:1.45;margin-top:8px}
-.ech{width:100%;height:260px}
+.ech{width:100%;height:260px;min-width:0}
 /* container rolável p/ gráficos com muitas categorias (dificuldade por UF/município) */
 .ech-scroll{max-height:300px;overflow-y:auto;overflow-x:hidden}
 .ech-scroll>div{width:100%}
@@ -383,8 +383,12 @@ table.tab td:nth-child(3){font-weight:500;color:var(--navy)}
   .corpo{padding:8px 8px 4px;gap:10px}
   .kpis{grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:10px}
   .kpi{padding:11px 12px} .kpi .v{font-size:19px}
-  .grid-cards{grid-template-columns:1fr;gap:10px}
-  .card{padding:12px 12px}
+  /* trilha do grid não pode exceder a tela (1fr = minmax(auto,1fr) estourava) */
+  .grid-cards{grid-template-columns:minmax(0,1fr);gap:10px}
+  .card{padding:11px 10px;min-width:0}
+  .card-h{flex-wrap:wrap;gap:2px 8px}
+  .card-h h3{font-size:13.5px}
+  .card-hint{font-size:10px}
   #mapa{height:56vh;min-height:320px}
   .ech{height:240px}
   .ech-scroll{max-height:60vh}

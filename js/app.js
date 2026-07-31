@@ -261,7 +261,7 @@ function graficoUF(f){
   el.style.height = Math.max(160, arr.length*22 + 26) + 'px';
   if(chUF){try{chUF.dispose();}catch(e){}} chUF=echarts.init(el);
   chUF.setOption({
-    grid:{left:6,right:70,top:6,bottom:6,containLabel:true},
+    grid:{left:6,right:ehMob()?52:70,top:6,bottom:6,containLabel:true},
     xAxis:{type:'value',show:false},
     yAxis:{type:'category',inverse:true,data:cats,axisTick:{show:false},axisLine:{show:false},
       axisLabel:{color:'#5B6068',fontSize:11,fontWeight:500}},
@@ -280,6 +280,9 @@ function graficoUF(f){
     (porUF? 'Todas as UFs' : 'Todos os municípios de '+S.uf)+' com registro, em ordem decrescente. '+
     'Clique para filtrar · role para ver a lista completa.';
 }
+
+/* true em telas de smartphone — usado para adaptar legendas/rótulos dos gráficos */
+function ehMob(){ try{ return window.matchMedia('(max-width:760px)').matches; }catch(e){ return false; } }
 
 /* ---------- gráfico: prazos (mediana + p90, com referência legal) ---------- */
 function graficoPrazos(f){
@@ -331,12 +334,17 @@ function graficoSit(f){
   var pctMap={}; data.forEach(function(d){ pctMap[d.name]=pct(d.value,tot); });
   var el=document.getElementById('chartSit');
   if(chSit){try{chSit.dispose();}catch(e){}} chSit=echarts.init(el);
+  var mob=ehMob();
+  var legSit = mob
+    ? {type:'scroll',orient:'horizontal',bottom:0,left:'center',icon:'roundRect',
+       textStyle:{color:'#5B6068',fontSize:10},itemWidth:10,itemHeight:10,itemGap:9}
+    : {type:'scroll',orient:'vertical',right:0,top:'center',icon:'roundRect',
+       textStyle:{color:'#5B6068',fontSize:10.5},itemWidth:11,itemHeight:11,itemGap:6};
+  legSit.formatter=function(name){ var v=pctMap[name]; return name+'  '+(v!=null? v.toLocaleString('pt-BR')+'%':''); };
   chSit.setOption({
     tooltip:{trigger:'item',formatter:function(p){return '<b>'+p.name+'</b><br>'+nfmt(p.value)+' ('+p.percent+'%)';}},
-    legend:{type:'scroll',orient:'vertical',right:0,top:'center',icon:'roundRect',
-      textStyle:{color:'#5B6068',fontSize:10.5},itemWidth:11,itemHeight:11,itemGap:6,
-      formatter:function(name){ var v=pctMap[name]; return name+'  '+(v!=null? v.toLocaleString('pt-BR')+'%':''); }},
-    series:[{type:'pie',radius:['46%','72%'],center:['30%','50%'],avoidLabelOverlap:true,
+    legend:legSit,
+    series:[{type:'pie',radius:mob?['40%','62%']:['46%','72%'],center:mob?['50%','40%']:['30%','50%'],avoidLabelOverlap:true,
       label:{show:true,position:'inside',formatter:function(p){return p.percent>=5? Math.round(p.percent)+'%':'';},
         color:'#fff',fontSize:9,fontWeight:700},labelLine:{show:false},data:data,
       emphasis:{scale:true,scaleSize:5}}]
@@ -352,10 +360,11 @@ function graficoDes(f){
   var arr=Object.values(m).sort(function(a,b){return b.n-a.n;}).slice(0,10).reverse();
   var el=document.getElementById('chartDes');
   if(chDes){try{chDes.dispose();}catch(e){}} chDes=echarts.init(el);
+  var mobDes=ehMob();
   chDes.setOption({
-    grid:{left:8,right:64,top:24,bottom:8,containLabel:true},
-    legend:{data:['Processos','R$ liberado'],top:0,right:0,textStyle:{color:'#5B6068',fontSize:11},
-      itemWidth:12,itemHeight:12},
+    grid:{left:8,right:mobDes?52:64,top:24,bottom:8,containLabel:true},
+    legend:{data:['Processos','R$ liberado'],top:0,left:mobDes?'center':'auto',right:mobDes?'auto':0,
+      type:'scroll',textStyle:{color:'#5B6068',fontSize:mobDes?9.5:11},itemWidth:12,itemHeight:12},
     tooltip:{trigger:'axis',axisPointer:{type:'shadow'},
       formatter:function(ps){var o=arr[ps[0].dataIndex];
         return '<b>'+o.k+'</b><br>Processos: '+nfmt(o.n)+'<br>Liberado: '+reais(o.vlib);}},
@@ -401,10 +410,13 @@ function graficoTempo(f){
   if(tt) tt.textContent=(mensal?'Evolução mensal':'Evolução anual')+sufixo;
   var el=document.getElementById('chartTempo');
   if(chTempo){try{chTempo.dispose();}catch(e){}} chTempo=echarts.init(el);
+  var mobT=ehMob();
   chTempo.setOption({
-    grid:{left:8,right:14,top:30,bottom:20,containLabel:true},
-    legend:{data:['Solicitações do ente','Processos com liberação'],top:0,right:0,
-      textStyle:{color:'#5B6068',fontSize:11},itemWidth:14,itemHeight:8},
+    grid:{left:8,right:14,top:mobT?34:30,bottom:20,containLabel:true},
+    legend:{data:['Solicitações do ente','Processos com liberação'],top:0,
+      left:mobT?'center':'auto',right:mobT?'auto':0,type:'scroll',
+      textStyle:{color:'#5B6068',fontSize:mobT?9.5:11},itemWidth:mobT?11:14,itemHeight:8,
+      formatter:mobT?function(n){return n==='Solicitações do ente'?'Solicitações':'Liberações';}:null},
     tooltip:{trigger:'axis',formatter:function(ps){ var h='<b>'+ps[0].axisValue+granul+'</b>';
       ps.forEach(function(x){h+='<br>'+x.marker+x.seriesName+': <b>'+nfmt(x.value)+'</b>';}); return h; }},
     xAxis:{type:'category',data:cats,boundaryGap:false,axisTick:{show:false},
@@ -436,10 +448,13 @@ function graficoDevol(f){
   var el=document.getElementById('chartDevol');
   el.style.height = Math.max(180, arr.length*22 + 42) + 'px';
   if(chDevol){try{chDevol.dispose();}catch(e){}} chDevol=echarts.init(el);
+  var mobD=ehMob();
   chDevol.setOption({
-    grid:{left:8,right:44,top:28,bottom:6,containLabel:true},
-    legend:{data:['Não avançou (ente)','Indeferido (SEDEC)'],top:0,right:0,
-      textStyle:{color:'#5B6068',fontSize:11},itemWidth:12,itemHeight:12},
+    grid:{left:8,right:mobD?36:44,top:mobD?32:28,bottom:6,containLabel:true},
+    legend:{data:['Não avançou (ente)','Indeferido (SEDEC)'],top:0,
+      left:mobD?'center':'auto',right:mobD?'auto':0,type:'scroll',
+      textStyle:{color:'#5B6068',fontSize:mobD?9.5:11},itemWidth:mobD?11:12,itemHeight:12,
+      formatter:mobD?function(n){return n==='Não avançou (ente)'?'Não avançou':'Indeferido';}:null},
     tooltip:{trigger:'axis',axisPointer:{type:'shadow'},
       formatter:function(ps){ var o=arr[ps[0].dataIndex];
         return '<b>'+o.nome+'</b><br>Não avançou (rascunho/excluído): '+o.ente+'%<br>'+
