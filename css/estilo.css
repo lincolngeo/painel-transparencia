@@ -124,7 +124,25 @@ select:focus{outline:2px solid var(--laranja);outline-offset:-1px;background:#ff
   max-height:max(360px, calc(100vh - var(--topo-h,150px) - 24px));overflow-y:auto;overflow-x:hidden}
 .card-narr{order:1} #cardDestaques{order:2} .card-mapa{order:3}
 
-.card{background:#fff;border-radius:12px;box-shadow:var(--sombra);padding:13px 15px}
+.card{background:#fff;border-radius:12px;box-shadow:var(--sombra);padding:13px 15px;position:relative}
+/* setas de rolagem internas (painéis com rolagem própria: ranking, dificuldade, tabelão) */
+.scroll-int{position:absolute;right:9px;width:30px;height:30px;border-radius:50%;border:0;
+  background:var(--navy);color:#fff;font-size:15px;line-height:1;cursor:pointer;display:none;
+  align-items:center;justify-content:center;z-index:6;box-shadow:0 2px 8px rgba(20,25,50,.35)}
+.scroll-int.on{display:flex}
+.scroll-int.cima{top:8px} .scroll-int.baixo{bottom:8px}
+.scroll-int:active,.scroll-int:hover{background:var(--laranja);color:#3a2606}
+.scroll-int.baixo.on{animation:pulsa 1.6s ease-in-out infinite}
+@keyframes pulsa{0%,100%{transform:translateY(0)}50%{transform:translateY(3px)}}
+@media (min-width:761px){ .scroll-int{display:none!important} }   /* só no mobile */
+/* setas de rolagem da PÁGINA (mobile) */
+.rol-pag{display:none;position:fixed;right:12px;bottom:14px;z-index:1700;flex-direction:column;gap:8px}
+.rol-btn{width:40px;height:40px;border-radius:50%;border:0;background:var(--navy);color:#fff;
+  font-size:18px;line-height:1;cursor:pointer;display:none;align-items:center;justify-content:center;
+  box-shadow:0 2px 10px rgba(20,25,50,.42)}
+.rol-btn.on{display:flex}
+.rol-btn:active{background:var(--laranja);color:#3a2606}
+#rolBaixo.on{animation:pulsa 1.6s ease-in-out infinite}
 .card-h{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:9px}
 .card h3{margin:0;font-size:11.5px;font-weight:700;color:var(--cinza);
   text-transform:uppercase;letter-spacing:.5px}
@@ -188,8 +206,9 @@ select:focus{outline:2px solid var(--laranja);outline-offset:-1px;background:#ff
 .exp-ctl{position:relative;z-index:1200}   /* acima dos demais controles do mapa */
 .exp-panel{display:none;position:absolute;top:0;right:30px;background:#fff;border-radius:10px;
   box-shadow:0 6px 24px rgba(20,25,50,.28);border:1px solid var(--linha);padding:7px;min-width:210px;z-index:2000}
-/* abre no hover (desktop) ou por toque/clique (.on, mobile) */
-.exp-ctl:hover .exp-panel, .exp-panel:hover, .exp-panel.on{display:block}
+/* abre por toque/clique (.on, mobile) sempre; hover só em telas com mouse */
+.exp-panel.on{display:block}
+@media(hover:hover){ .exp-ctl:hover .exp-panel, .exp-panel:hover{display:block} }
 .exp-panel .exp-tit{font-size:11px;color:var(--cinza);font-weight:700;padding:3px 8px 6px;
   border-bottom:1px solid var(--linha);margin-bottom:4px;text-transform:uppercase;letter-spacing:.3px}
 .exp-panel button{display:block;width:100%;text-align:left;border:0;background:transparent;
@@ -342,30 +361,53 @@ table.tab td:nth-child(3){font-weight:500;color:var(--navy)}
 }
 /* ---------- responsivo: celular / tablet estreito ---------- */
 @media (max-width:760px){
+  html,body{overflow-x:hidden}                 /* nunca rolar a página na horizontal */
   /* topo NÃO congela em tela pequena (senão os filtros ocupam a tela toda) */
   .topo{position:static;box-shadow:var(--sombra)}
-  header{flex-wrap:wrap;padding:9px 14px;gap:8px 12px}
-  .marca-placa img{width:44px}
-  header h1{font-size:14.5px;line-height:1.15}
-  header .sub{font-size:10.5px} .autoria-topo{font-size:10.5px;margin-top:4px}
-  header nav{order:3;width:100%;flex-wrap:wrap;gap:3px}
-  header nav a{padding:5px 9px;font-size:11.5px}
-  .filtros{gap:10px 12px;padding:8px 12px}
+  header{flex-wrap:wrap;padding:9px 12px;gap:8px 12px}
+  .marca-placa img{width:42px}
+  header .titwrap{flex:1 1 60%;min-width:0}
+  header h1{font-size:14px;line-height:1.15}
+  header .sub{font-size:10.5px} .autoria-topo{font-size:10px;margin-top:4px}
+  header nav{order:3;width:100%;flex-wrap:wrap;gap:4px;justify-content:flex-start}
+  header nav a{padding:6px 10px;font-size:12px}
+  /* filtros e corpo ocupam toda a largura, com respiro mínimo nas laterais */
+  .filtros{gap:10px 12px;padding:9px 10px}
   .seg.wrap{max-width:none}
-  .fgrupo{min-width:0}
-  .fgrupo-busca input{width:100%}
+  .seg button{padding:6px 10px;font-size:12px}       /* alvos de toque maiores */
+  .fgrupo{min-width:0} .fgrupo-busca{flex:1 1 100%}
+  .fgrupo-busca input{width:100%} .periodo{flex-wrap:wrap}
   .fgrupo-acoes{margin-left:0;width:100%;justify-content:space-between}
-  select{min-width:120px}
-  .recorte-bar{padding:7px 12px}
-  .corpo{padding:10px 12px;gap:12px}
-  .kpis{grid-template-columns:repeat(2,1fr);gap:8px}
-  .kpi{padding:10px 11px} .kpi .v{font-size:18px}
-  .grid-cards{grid-template-columns:1fr;gap:12px}
-  #mapa{height:300px}
-  .ech{height:230px}
-  .card{padding:12px}
+  select{min-width:130px;height:33px}
+  .recorte-bar{padding:8px 10px}
+  .corpo{padding:8px 8px 4px;gap:10px}
+  .kpis{grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:10px}
+  .kpi{padding:11px 12px} .kpi .v{font-size:19px}
+  .grid-cards{grid-template-columns:1fr;gap:10px}
+  .card{padding:12px 12px}
+  #mapa{height:56vh;min-height:320px}
+  .ech{height:240px}
+  .ech-scroll{max-height:60vh}
   .tab-h{flex-wrap:wrap;gap:8px} .tab-busca input{width:100%}
-  .tabelao{padding:0 12px 8px}
-  .modal{max-height:92vh} .modal-corpo{padding:16px 16px}
-  .modal-fundo{padding:10px}
+  .tabelao{padding:0 8px 6px}
+  .modal{max-height:92vh} .modal-corpo{padding:16px 15px}
+  .modal-fundo{padding:8px}
+  /* controles do mapa: alvos de toque maiores */
+  .ctl-btn{width:36px;height:36px;line-height:36px;font-size:20px}
+  .ctl-btn svg{width:20px;height:20px}
+  .ctl-norte{width:36px;height:36px}
+  .leaflet-touch .leaflet-bar a{width:36px;height:36px;line-height:36px}
+  .exp-panel{right:38px;min-width:200px}
+  .exp-panel button{padding:9px 11px;font-size:13.5px}
+  /* setas de rolagem da página */
+  .rol-pag{display:flex}
+}
+/* ---------- telas bem estreitas ---------- */
+@media (max-width:430px){
+  header h1{font-size:13px}
+  .autoria-topo{font-size:9.5px}
+  header nav a{padding:5px 8px;font-size:11px}
+  .fgrupo>label{font-size:9.5px}
+  .kpi .v{font-size:17px} .kpi .r,.kpi .sub{font-size:9.5px}
+  #mapa{height:52vh}
 }

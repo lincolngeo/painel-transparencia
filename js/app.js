@@ -162,6 +162,7 @@ function render(){
   destaques(f);
   narrativa(f);
   tabela(f);
+  setTimeout(atualizaInternos,150);
 }
 
 /* ---------- barra de recorte + chips ---------- */
@@ -1004,9 +1005,43 @@ function ligaEventos(){
     new ResizeObserver(medeTopo).observe(document.querySelector('.topo'));
   }
   medeTopo();
+  scrollPagina();
+  ['ufScroll','devolScroll'].forEach(function(id){ scrollInterno(document.getElementById(id)); });
+  scrollInterno(document.querySelector('.tabela-wrap'));
 }
 function medeTopo(){ var t=document.querySelector('.topo');
   if(t) document.documentElement.style.setProperty('--topo-h', t.offsetHeight+'px'); }
+
+/* ===================== setas de rolagem ===================== */
+var _internos=[];
+function scrollInterno(el){
+  if(!el || el._aff) return; el._aff={};
+  var wrap=document.createElement('div'); wrap.style.position='relative';
+  el.parentNode.insertBefore(wrap,el); wrap.appendChild(el);
+  var up=document.createElement('button'); up.type='button'; up.className='scroll-int cima'; up.textContent='▴'; up.title='Rolar para cima';
+  var dn=document.createElement('button'); dn.type='button'; dn.className='scroll-int baixo'; dn.textContent='▾'; dn.title='Rolar para baixo';
+  wrap.appendChild(up); wrap.appendChild(dn);
+  up.onclick=function(){ el.scrollBy({top:-Math.round(el.clientHeight*0.7),behavior:'smooth'}); };
+  dn.onclick=function(){ el.scrollBy({top:Math.round(el.clientHeight*0.7),behavior:'smooth'}); };
+  el._aff.upd=function(){
+    up.classList.toggle('on', el.scrollTop>16);
+    dn.classList.toggle('on', (el.scrollHeight-el.scrollTop-el.clientHeight)>16);
+  };
+  el.addEventListener('scroll',el._aff.upd,{passive:true}); _internos.push(el);
+}
+function atualizaInternos(){ _internos.forEach(function(el){ if(el._aff) el._aff.upd(); }); }
+function scrollPagina(){
+  var cima=document.getElementById('rolCima'), baixo=document.getElementById('rolBaixo'); if(!cima) return;
+  function upd(){
+    var y=window.pageYOffset||document.documentElement.scrollTop||0;
+    var max=document.documentElement.scrollHeight-window.innerHeight;
+    cima.classList.toggle('on', y>220);
+    baixo.classList.toggle('on', y<max-40);
+  }
+  cima.onclick=function(){ window.scrollBy({top:-Math.round(window.innerHeight*0.82),behavior:'smooth'}); };
+  baixo.onclick=function(){ window.scrollBy({top:Math.round(window.innerHeight*0.82),behavior:'smooth'}); };
+  window.addEventListener('scroll',upd,{passive:true}); window.addEventListener('resize',upd); setTimeout(upd,300);
+}
 function resizeTudo(){
   [chUF,chPz,chSit,chDes,chTempo,chDevol].forEach(function(c){ if(c) try{c.resize();}catch(e){} });
   if(mapa) try{ mapa.invalidateSize(); }catch(e){}

@@ -5,9 +5,15 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Painel de Transparência da SEDEC — Proteção e Defesa Civil</title>
 <meta name="theme-color" content="#272F68">
+<link rel="manifest" href="manifest.json">
 <link rel="icon" type="image/png" href="img/icon-192.png">
+<link rel="apple-touch-icon" href="img/icon-192.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Transparência SEDEC">
 <link rel="stylesheet" href="libs/leaflet.css">
-<link rel="stylesheet" href="css/estilo.css?v=20">
+<link rel="stylesheet" href="css/estilo.css?v=22">
 </head>
 <body>
 
@@ -210,7 +216,13 @@
 
 <div class="rodape" id="rodape"></div>
 
-<!-- modal (Sobre & TCU / detalhe) -->
+<!-- setas de rolagem da página (aparecem no mobile) -->
+<div class="rol-pag" id="rolPag">
+  <button class="rol-btn" id="rolCima" type="button" title="Subir" aria-label="Rolar para cima">▴</button>
+  <button class="rol-btn" id="rolBaixo" type="button" title="Descer" aria-label="Rolar para baixo">▾</button>
+</div>
+
+<!-- modal (Sobre / detalhe) -->
 <div class="modal-fundo" id="modalFundo">
   <div class="modal">
     <div class="modal-head">
@@ -224,6 +236,14 @@
 <script src="libs/leaflet.js"></script>
 <script src="libs/echarts.min.js"></script>
 <script src="libs/fflate.min.js"></script>
-<script src="js/app.js?v=22"></script>
+<script src="js/app.js?v=23"></script>
+<script>
+/* Registro do service worker — habilita instalação no celular (PWA). */
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register('sw.js').catch(function () {});
+  });
+}
+</script>
 </body>
 </html>
