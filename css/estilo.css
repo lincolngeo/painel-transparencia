@@ -392,6 +392,12 @@ table.tab td:nth-child(3){font-weight:500;color:var(--navy)}
   #mapa{height:56vh;min-height:320px}
   .ech{height:240px}
   .ech-scroll{max-height:60vh}
+  /* funil: sem larguras fixas que estouravam a tela — rótulo+valor na 1ª linha,
+     barra ocupando 100% na 2ª linha */
+  .funil-row{flex-wrap:wrap;gap:3px 8px;padding:5px 4px}
+  .funil-lbl{flex:1 1 auto;min-width:0;font-size:12px}
+  .funil-val{flex:0 1 auto;order:2;font-size:11px;white-space:nowrap}
+  .funil-bar{flex:1 1 100%;order:3;height:13px}
   .tab-h{flex-wrap:wrap;gap:8px} .tab-busca input{width:100%}
   .tabelao{padding:0 8px 6px}
   .modal{max-height:92vh} .modal-corpo{padding:16px 15px}
