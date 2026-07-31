@@ -316,7 +316,7 @@ table.tab td:nth-child(3){font-weight:500;color:var(--navy)}
   .topo{position:static!important;box-shadow:none}
   header{position:static;padding:10px 16px}
   header h1{font-size:15px} header .sub{display:none}
-  nav,.filtros,.exp-wrap,.card-hint,.seg.mini,.recorte-bar,.rol-pag{display:none!important}
+  nav,.filtros,.exp-wrap,.card-hint,.seg.mini,.recorte-bar,.rol-pag,.scroll-int{display:none!important}
   /* relatório sintético: sem planilha, listas longas, mapa interativo nem síntese solta */
   .tabelao,.card-mapa,.card-narr,#cardUF,#cardDevol,#cardDes,#cardDestaques{display:none!important}
   .print-head{display:block!important;margin:0 0 8px;border-bottom:2px solid var(--laranja);padding-bottom:7px}
@@ -354,13 +354,15 @@ table.tab td:nth-child(3){font-weight:500;color:var(--navy)}
 }
 
 /* ---------- responsivo: tablet ---------- */
-@media (max-width:1150px){
+/* 'screen and' → estes ajustes valem só na TELA; a impressão (mesmo vinda de
+   celular) sempre usa o layout A4 padrão do desktop */
+@media screen and (max-width:1150px){
   .corpo{grid-template-columns:1fr}
   .lateral{position:static;max-height:none;overflow:visible}
   .kpis{grid-template-columns:repeat(3,1fr)}
 }
 /* ---------- responsivo: celular / tablet estreito ---------- */
-@media (max-width:760px){
+@media screen and (max-width:760px){
   html,body{overflow-x:hidden}                 /* nunca rolar a página na horizontal */
   /* topo NÃO congela em tela pequena (senão os filtros ocupam a tela toda) */
   .topo{position:static;box-shadow:var(--sombra)}
@@ -413,7 +415,7 @@ table.tab td:nth-child(3){font-weight:500;color:var(--navy)}
   .rol-pag{display:flex}
 }
 /* ---------- telas bem estreitas ---------- */
-@media (max-width:430px){
+@media screen and (max-width:430px){
   header h1{font-size:13px}
   .autoria-topo{font-size:9.5px}
   header nav a{padding:5px 8px;font-size:11px}

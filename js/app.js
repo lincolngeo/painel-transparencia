@@ -281,8 +281,17 @@ function graficoUF(f){
     'Clique para filtrar · role para ver a lista completa.';
 }
 
-/* true em telas de smartphone — usado para adaptar legendas/rótulos dos gráficos */
-function ehMob(){ try{ return window.matchMedia('(max-width:760px)').matches; }catch(e){ return false; } }
+/* modo impressão: quando true, os gráficos ignoram o layout mobile e saem no
+   padrão desktop — assim o PDF é sempre A4 igual ao desktop, mesmo exportado do celular */
+var IMP=false;
+/* true em telas de smartphone (mas nunca na impressão) — adapta legendas/rótulos dos gráficos */
+function ehMob(){ if(IMP) return false; try{ return window.matchMedia('(max-width:760px)').matches; }catch(e){ return false; } }
+/* re-renderiza os gráficos que aparecem no PDF (evolução, prazos, situação) no
+   estado atual de IMP; flush força o desenho síncrono antes do snapshot de impressão */
+function graficosImpressao(){
+  var f=filtra(); graficoTempo(f); graficoPrazos(f); graficoSit(f);
+  [chTempo,chPz,chSit].forEach(function(c){ if(c) try{ c.getZr().flush(); }catch(e){} });
+}
 
 /* ---------- gráfico: prazos (mediana + p90, com referência legal) ---------- */
 function graficoPrazos(f){
@@ -296,6 +305,7 @@ function graficoPrazos(f){
   var el=document.getElementById('chartPrazos');
   if(chPz){try{chPz.dispose();}catch(e){}} chPz=echarts.init(el);
   chPz.setOption({
+    animation:!IMP,
     grid:{left:10,right:14,top:30,bottom:32,containLabel:true},
     legend:{data:['Mediana','p90'],top:0,right:0,textStyle:{color:'#5B6068',fontSize:11},itemWidth:12,itemHeight:8},
     tooltip:{trigger:'axis',axisPointer:{type:'shadow'},formatter:function(ps){var i=ps[0].dataIndex,o=st[i];
@@ -342,6 +352,7 @@ function graficoSit(f){
        textStyle:{color:'#5B6068',fontSize:10.5},itemWidth:11,itemHeight:11,itemGap:6};
   legSit.formatter=function(name){ var v=pctMap[name]; return name+'  '+(v!=null? v.toLocaleString('pt-BR')+'%':''); };
   chSit.setOption({
+    animation:!IMP,
     tooltip:{trigger:'item',formatter:function(p){return '<b>'+p.name+'</b><br>'+nfmt(p.value)+' ('+p.percent+'%)';}},
     legend:legSit,
     series:[{type:'pie',radius:mob?['40%','62%']:['46%','72%'],center:mob?['50%','40%']:['30%','50%'],avoidLabelOverlap:true,
@@ -412,6 +423,7 @@ function graficoTempo(f){
   if(chTempo){try{chTempo.dispose();}catch(e){}} chTempo=echarts.init(el);
   var mobT=ehMob();
   chTempo.setOption({
+    animation:!IMP,
     grid:{left:8,right:14,top:mobT?34:30,bottom:20,containLabel:true},
     legend:{data:['Solicitações do ente','Processos com liberação'],top:0,
       left:mobT?'center':'auto',right:mobT?'auto':0,type:'scroll',
@@ -1012,6 +1024,10 @@ function ligaEventos(){
   document.getElementById('modalFundo').onclick=function(e){ if(e.target===this) fechaModal(); };
   document.addEventListener('keydown',function(e){ if(e.key==='Escape') fechaModal(); });
   window.addEventListener('resize',function(){ resizeTudo(); medeTopo(); });
+  // impressão/PDF: força os gráficos ao padrão desktop (A4 igual em qualquer tela)
+  // e restaura o estilo da tela depois — cobre o botão "Relatório (PDF)" e o Ctrl+P
+  window.addEventListener('beforeprint',function(){ IMP=true; graficosImpressao(); });
+  window.addEventListener('afterprint',function(){ IMP=false; graficosImpressao(); });
   // ResizeObserver: corrige o dimensionamento dos gráficos/mapa quando o
   // container muda (ex.: painel exibido depois da carga, coluna redimensionada).
   if(window.ResizeObserver){
