@@ -1,4 +1,5 @@
-Painel de Transparência da SEDEC — Recursos de Resposta a Desastres
+Painel de Transparência da SEDEC — Proteção e Defesa Civil
+(ações de resposta e ações de reconstrução)
 
 © 2026 Lincoln Duques de Barros — Analista de Infraestrutura, SEDEC/MIDR.
 
@@ -13,11 +14,13 @@ Secretaria Nacional de Proteção e Defesa Civil (SEDEC/MIDR), e destina-se à
 eventual incorporação institucional pela própria SEDEC/MIDR. A licença CC BY 4.0
 permite essa migração preservando o crédito de autoria.
 
-Dados: as informações de execução das ações de resposta são públicas, extraídas
-do Sistema Integrado de Informações sobre Desastres (S2iD/SEDEC/MIDR); a malha
-territorial é do IBGE. A licença deste repositório recai sobre o painel (código,
-organização e textos), não sobre os dados oficiais de origem.
+Dados: as informações de execução das ações de resposta e de reconstrução são
+públicas, extraídas do Sistema Integrado de Informações sobre Desastres
+(S2iD/SEDEC/MIDR); a malha territorial é do IBGE. A licença deste repositório
+recai sobre o painel (código, organização e textos), não sobre os dados oficiais
+de origem.
 
 Como atribuir (exemplo):
-  "Painel de Transparência da SEDEC, de Lincoln Duques de Barros (SEDEC/MIDR),
-   licenciado sob CC BY 4.0 — https://github.com/lincolngeo/painel-transparencia"
+  "Painel de Transparência da SEDEC — Proteção e Defesa Civil, de Lincoln Duques
+   de Barros (SEDEC/MIDR), licenciado sob CC BY 4.0 —
+   https://github.com/lincolngeo/painel-transparencia"

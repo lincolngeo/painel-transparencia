@@ -1021,8 +1021,23 @@ function modalSobre(){
     '<b>Aba aberta agora:</b> '+META.recorte+', com consolidação gerada em '+
     dbr(META.data_geracao)+'.<br>'+
     '<b>Reconhecimento federal</b> está em fase de elaboração.</p>'+
-    '<p style="margin-top:14px;color:#8A9099;font-size:12px">Elaboração: Lincoln Duques de Barros — '+
-    'Analista de Infraestrutura — SEDEC/MIDR. Protótipo em avaliação. Dados públicos.</p>';
+    '<h4>Autoria, licença e como citar</h4>'+
+    '<p><b>Concepção, tratamento de dados e análise:</b> '+AUTOR+' — Analista de '+
+    'Infraestrutura, SEDEC/MIDR. © 2026.</p>'+
+    '<p>O painel — <b>código, organização dos dados e textos</b> — está licenciado sob '+
+    '<a href="'+LIC_URL+'" target="_blank" rel="noopener license"><b>Creative Commons '+
+    'Attribution 4.0 International (CC BY 4.0)</b></a>: qualquer pessoa ou instituição pode '+
+    'copiar, redistribuir e adaptar, inclusive para uso institucional, <b>desde que mantenha a '+
+    'atribuição ao autor</b>, indique se houve modificações e referencie a licença. A licença '+
+    '<b>não recai sobre os dados oficiais de origem</b> (S2iD/SEDEC/MIDR e malha territorial do '+
+    'IBGE), que são públicos.</p>'+
+    '<div class="tcu-item"><b>Como citar:</b> “Painel de Transparência da SEDEC — Proteção e '+
+    'Defesa Civil, de '+AUTOR+' (SEDEC/MIDR), licenciado sob CC BY 4.0 — '+REPO_URL+'”.</div>'+
+    '<p style="color:#8A9099;font-size:12px">Protótipo em avaliação, elaborado no âmbito da '+
+    'SEDEC/MIDR e destinado à eventual incorporação institucional pela própria Secretaria — a '+
+    'licença permite essa migração preservando o crédito de autoria. Texto completo da licença e '+
+    'do aviso de direitos nos arquivos <b>LICENSE</b> e <b>NOTICE</b> do '+
+    '<a href="'+REPO_URL+'" target="_blank" rel="noopener">repositório público</a>.</p>';
   abreModal('Sobre o Painel de Transparência da SEDEC', h);
 }
 
@@ -1351,13 +1366,22 @@ function bindBusca(){
   document.addEventListener('click',function(e){ if(!inp.parentElement.contains(e.target)) fechaBusca(); });
 }
 
+/* autoria e licença — CC BY 4.0 em nome do autor. Fica no rodapé (portanto também
+   no PDF exportado) e na aba Sobre, além dos arquivos LICENSE/NOTICE do repositório. */
+var AUTOR='Lincoln Duques de Barros';
+var LIC_URL='https://creativecommons.org/licenses/by/4.0/deed.pt-br';
+var REPO_URL='https://github.com/lincolngeo/painel-transparencia';
 function rodape(){
   document.getElementById('rodape').innerHTML=
     '<b>Fonte:</b> '+META.fonte+' · Consolidação gerada em '+dbr(META.data_geracao)+'. '+
     '<b>Recorte:</b> '+META.recorte+' '+
     '<br>Painel de transparência da SEDEC/MIDR — protótipo em avaliação. '+
-    'Elaboração: Lincoln Duques de Barros — Analista de Infraestrutura — SEDEC/MIDR. '+
-    'Dados públicos; malha territorial IBGE 2025.';
+    'Concepção, tratamento de dados e análise: <b>'+AUTOR+'</b> — Analista de '+
+    'Infraestrutura — SEDEC/MIDR. Dados públicos; malha territorial IBGE 2025.'+
+    '<br>© 2026 '+AUTOR+'. Painel (código, organização e textos) licenciado sob '+
+    '<a href="'+LIC_URL+'" target="_blank" rel="noopener license"><b>CC BY 4.0</b></a> — '+
+    'uso livre, inclusive institucional, mantida a atribuição ao autor. '+
+    'A licença não recai sobre os dados oficiais de origem (S2iD/SEDEC e malha do IBGE).';
 }
 
 carrega();
