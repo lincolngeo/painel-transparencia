@@ -313,7 +313,10 @@ function kpis(f){
   var medAna=mediana(f.map(function(p){return p.tana;}));
   var medLib=mediana(f.map(function(p){return p[M().prazo3.k];}));
   var nMun=Object.keys(f.reduce(function(a,p){if(p.cd)a[p.cd]=1;return a;},{})).length;
-  var subSedec='SEDEC: '+(medAna!=null?medAna+'d anál.':'—')+' · '+(medLib!=null?medLib+'d liber.':'—');
+  // o 3º prazo é da SEDEC na Resposta (liberação) e do ENTE na Reconstrução (licitação)
+  var rot3=(M().prazo3.k==='tlic')?'licit.':'liber.';
+  var subSedec='SEDEC: '+(medAna!=null?medAna+'d anál.':'—')+
+    ' · '+(medLib!=null?medLib+'d '+rot3:'—')+(M().prazo3.dono==='ente'?' (ente)':'');
   var K=[
     ['','v', reaisC(vlib), 'Recurso liberado', suc+' processos com repasse'],
     ['k-laranja','v', reaisC(vsol), 'Valor solicitado', 'demanda dos entes'],
@@ -415,7 +418,8 @@ function graficoPrazos(f){
   function stat(campo){ var v=f.map(function(p){return p[campo];}).filter(function(x){return x!=null;});
     return {n:v.length, med:mediana(v), p90:pctl(v,.9), avg:media(v), max:v.length?Math.max.apply(null,v):null}; }
   var st=[stat('tsol'),stat('tana'),stat(M().prazo3.k)];
-  var cats=['Solicitação\n(ente)','Análise\n(SEDEC)','Liberação\n(SEDEC)'];
+  // 3ª categoria conforme o módulo: liberação (Resposta) ou licitação (Reconstrução)
+  var cats=['Solicitação\n(ente)','Análise\n(SEDEC)',M().prazo3.lbl];
   // % das solicitações do ente dentro do prazo legal de 90 dias
   var vsol=f.map(function(p){return p.tsol;}).filter(function(x){return x!=null;});
   var dentro=vsol.length? Math.round(100*vsol.filter(function(x){return x<=PRAZO_SOLIC_LEGAL;}).length/vsol.length):null;
@@ -923,7 +927,7 @@ function abreModal(tit,html){
 }
 function fechaModal(){ document.getElementById('modalFundo').classList.remove('on'); }
 function modalSobre(){
-  var N=META.notas||{};
+  // (as notas do módulo não são mais usadas aqui: a aba Sobre descreve as duas frentes)
   var leg='https://www.gov.br/mdr/pt-br/acesso-a-informacao/legislacao/secretaria-nacional-de-protecao-e-defesa-civil/legislacao';
   var h='<h4>O que é este painel</h4>'+
     '<p>Painel público de transparência da <b>Secretaria Nacional de Proteção e Defesa Civil '+
@@ -937,21 +941,31 @@ function modalSobre(){
     'situação de emergência ou estado de calamidade pública e solicita à União o reconhecimento, que '+
     'habilita o acesso a recursos e medidas federais. <i>(frente em elaboração)</i></div>'+
     '<div class="tcu-item"><b>2. Ações de resposta</b> — socorro, assistência às vítimas e '+
-    'restabelecimento dos serviços essenciais.'+
-    (MODULO==='resposta'? ' <b>É a aba aberta agora.</b>':' <i>(disponível na aba Resposta)</i>')+'</div>'+
+    'restabelecimento dos serviços essenciais. <i>(aba Resposta)</i></div>'+
     '<div class="tcu-item"><b>3. Ações de reconstrução</b> — recuperação da infraestrutura pública '+
-    'danificada ou destruída, com plano de trabalho, licitação da obra pelo ente e repasse em parcelas.'+
-    (MODULO==='reconstrucao'? ' <b>É a aba aberta agora.</b>':' <i>(disponível na aba Reconstrução)</i>')+'</div>'+
+    'danificada ou destruída, com plano de trabalho, licitação da obra pelo ente e repasse em '+
+    'parcelas. <i>(aba Reconstrução)</i></div>'+
     '<p>O painel já cobre <b>resposta</b> e <b>reconstrução</b>, alternáveis nas abas do cabeçalho; '+
-    'o <b>reconhecimento federal</b> será incorporado para que o painel reflita todas as ações da SEDEC.</p>'+
-    (MODULO==='reconstrucao'
-      ? '<h4>O que muda na reconstrução</h4>'+
-        '<p>O pedido é um <b>plano de trabalho</b> (não um formulário de resposta), e o caminho tem duas '+
-        'etapas a mais do lado do ente: <b>licitar a obra</b> e <b>executá-la</b>. Por isso o gráfico de '+
-        'prazos traz <b>licitação</b> no lugar da liberação, e o repasse aparece <b>parcelado</b>. '+
-        'Há ainda uma situação sem equivalente na resposta: <b>sobrestado</b> — processo suspenso, que não '+
-        'é indeferimento nem desistência, e por isso é contado à parte.</p>'
-      : '')+
+    'o <b>reconhecimento federal</b> será incorporado para que o painel reflita todas as ações da '+
+    'SEDEC. Este texto descreve as três frentes por inteiro — não muda conforme a aba aberta.</p>'+
+    '<h4>Resposta e reconstrução: o que difere</h4>'+
+    '<p>As duas frentes têm a mesma leitura de indicadores, mas percursos diferentes — e o painel '+
+    'respeita essa diferença:</p>'+
+    '<div class="tcu-item"><b>Na resposta</b>, o pedido é um formulário de recursos e o prazo final '+
+    'medido é a <b>liberação</b> pela SEDEC. Existe a trilha da <b>Operação Carro Pipa (OCP)</b>, '+
+    'encaminhada ao Exército, e a <b>fase da ação</b> (socorro/assistência ou restabelecimento).</div>'+
+    '<div class="tcu-item"><b>Na reconstrução</b>, o pedido é um <b>plano de trabalho</b> e o caminho '+
+    'tem duas etapas a mais do lado do ente: <b>licitar</b> a obra e <b>executá-la</b>. Por isso o '+
+    'gráfico de prazos traz <b>licitação</b> no lugar da liberação, e o repasse aparece '+
+    '<b>parcelado</b> (até três parcelas). Não há OCP nem fase da ação. Há ainda uma situação sem '+
+    'equivalente na resposta: <b>sobrestado</b> — processo suspenso, que não é indeferimento nem '+
+    'desistência, e por isso é contado à parte, fora dos "pleitos sem acesso".</div>'+
+    '<p>Os <b>90 dias</b> para apresentar o plano de trabalho (Portaria 3.033/2020, art. 4º) '+
+    'aplicam-se integralmente à <b>reconstrução</b>; nas ações de <b>resposta</b> imediata a lei '+
+    'dispensa o plano de trabalho. Para a <b>licitação</b> não há número fixo em lei: vale o prazo '+
+    'estipulado no documento que autorizou seu início, e o empenho pode ser cancelado se o ente não '+
+    'concluir nem apresentar justificativa técnica. A <b>análise e a liberação da SEDEC não têm '+
+    'prazo legal expresso</b> — são apresentadas apenas de forma descritiva.</p>'+
     '<h4>Base legal e normativa</h4>'+
     '<p>A SEDEC é o <b>órgão central do Sistema Nacional de Proteção e Defesa Civil (SINPDEC)</b>. '+
     'O aparato principal: <b>Lei nº 12.608/2012</b> (Política Nacional de Proteção e Defesa Civil e o '+
@@ -981,15 +995,32 @@ function modalSobre(){
     'as <b>não concluídas pelo ente</b> (rascunho ou excluído) e as <b>indeferidas pela SEDEC</b>. '+
     'O total mede a dificuldade de converter a necessidade em recurso; a decomposição preserva a '+
     'quem cabe cada etapa, sem atribuir a um a decisão do outro.</p>'+
-    (N.ocp? '<h4>Operação Carro Pipa (OCP)</h4><div class="tcu-item">'+N.ocp+'</div>':'')+
-    (N.sobrestado? '<h4>Sobrestado</h4><div class="tcu-item">'+N.sobrestado+'</div>':'')+
-    (N.parcelas? '<h4>Repasse em parcelas</h4><p>'+N.parcelas+'</p>':'')+
-    (N.prazos? '<h4>Prazos</h4><p>'+N.prazos+'</p>':'')+
-    (N.finalidade? '<h4>Finalidade (custeio × investimento)</h4><p>'+N.finalidade+'</p>':'')+
-    (N.revisoes? '<p style="color:#8A9099;font-size:12px">'+N.revisoes+'</p>':'')+
-    '<h4>Fonte e data</h4><p>'+META.fonte+'<br>Recorte deste piloto: '+META.recorte+'<br>'+
-    '<b>Reconhecimento federal</b> está em fase de elaboração.<br>'+
-    'Consolidação gerada em '+dbr(META.data_geracao)+'.</p>'+
+    // Estes blocos descrevem AS DUAS frentes sempre, independente da aba aberta:
+    // antes vinham de meta.notas do módulo carregado e por isso mudavam de conteúdo.
+    '<h4>Operação Carro Pipa (OCP) — só na resposta</h4>'+
+    '<div class="tcu-item">Solicitações de OCP são encaminhadas ao Exército Brasileiro. Entram na '+
+    'contagem de processos, mas ficam <b>fora dos indicadores financeiros</b>, porque não há '+
+    'transferência de recurso pela SEDEC ao ente.</div>'+
+    '<h4>Sobrestado — só na reconstrução</h4>'+
+    '<div class="tcu-item">Processo <b>suspenso</b> até que se resolva a pendência que o travou. Não é '+
+    'indeferimento nem desistência: por não ter desfecho, aparece separado no funil e não conta como '+
+    'pleito sem acesso ao recurso.</div>'+
+    '<h4>Repasse em parcelas — só na reconstrução</h4>'+
+    '<p>O valor empenhado para a obra é liberado em <b>até três parcelas</b>, conforme a execução pelo '+
+    'ente. O tabelão da aba Reconstrução mostra o valor empenhado e o número de parcelas de cada '+
+    'processo.</p>'+
+    '<h4>Finalidade (custeio × investimento)</h4>'+
+    '<p>Vem do GND do empenho: <b>33</b> = despesa corrente (custeio), <b>44</b> = despesa de capital '+
+    '(investimento). Só há finalidade para processos que chegaram à liberação. Na reconstrução quase '+
+    'tudo é investimento, porque o objeto são obras.</p>'+
+    '<p style="color:#8A9099;font-size:12px">Vários protocolos do mesmo nº de processo podem ser '+
+    'revisões do mesmo pleito; nesse caso são consolidados na versão mais avançada, para não duplicar '+
+    'valores. Na reconstrução isso não ocorre: cada processo aparece uma única vez, e os sufixos do '+
+    'protocolo indicam pleitos sequenciais distintos do mesmo município.</p>'+
+    '<h4>Fonte e data</h4><p>'+META.fonte+'<br>'+
+    '<b>Aba aberta agora:</b> '+META.recorte+', com consolidação gerada em '+
+    dbr(META.data_geracao)+'.<br>'+
+    '<b>Reconhecimento federal</b> está em fase de elaboração.</p>'+
     '<p style="margin-top:14px;color:#8A9099;font-size:12px">Elaboração: Lincoln Duques de Barros — '+
     'Analista de Infraestrutura — SEDEC/MIDR. Protótipo em avaliação. Dados públicos.</p>';
   abreModal('Sobre o Painel de Transparência da SEDEC', h);
@@ -1192,12 +1223,16 @@ function aplicaAnosUI(){
 }
 function ligaEventos(){
   ligaSeg('fRegiao','regiao'); ligaSeg('fFase','fase');
-  // anos (multisseleção) + período por data
-  document.querySelectorAll('#fAno button').forEach(function(b){ b.onclick=function(){
+  // anos (multisseleção) + período por data.
+  // DELEGAÇÃO no container: os botões de ano são recriados a cada troca de aba
+  // (os anos disponíveis mudam entre módulos); handler no botão se perderia ali.
+  document.getElementById('fAno').addEventListener('click',function(e){
+    var b=e.target.closest('button'); if(!b) return;
     var a=b.getAttribute('data-a');
     if(a===''){ S.anos=[]; }
     else { var y=parseInt(a,10), i=S.anos.indexOf(y); if(i>=0) S.anos.splice(i,1); else S.anos.push(y); }
-    aplicaAnosUI(); render(); }; });
+    aplicaAnosUI(); render();
+  });
   var di=document.getElementById('fDini'), df=document.getElementById('fDfim');
   di.onchange=function(){ S.dini=this.value; render(); };
   df.onchange=function(){ S.dfim=this.value; render(); };

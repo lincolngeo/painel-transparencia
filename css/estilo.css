@@ -317,31 +317,37 @@ table.tab td:nth-child(3){font-weight:500;color:var(--navy)}
 .print-destaque{display:none}
 @media print{
   @page{margin:11mm}
+  /* CRÍTICO: por padrão o navegador DESCARTA cores de fundo ao imprimir — o que
+     apagava as barras e os pontos coloridos do funil de admissibilidade (ele é
+     HTML, não canvas). Isto força a impressão fiel das cores. */
+  *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;
+    color-adjust:exact!important}
   /* o topo é sticky na tela — precisa virar estático no papel (senão o cabeçalho
      fica flutuando por cima do mapa/conteúdo) */
   .topo{position:static!important;box-shadow:none}
   header{position:static;padding:10px 16px}
-  header h1{font-size:15px} header .sub{display:none}
+  header h1{font-size:16px} header .sub{display:none}
+  .autoria-topo{font-size:10px}
   nav,.filtros,.exp-wrap,.card-hint,.seg.mini,.recorte-bar,.rol-pag,.scroll-int,
   .kpi-tog{display:none!important}
   /* relatório sintético: sem planilha, listas longas, mapa interativo nem síntese solta */
   .tabelao,.card-mapa,.card-narr,#cardUF,#cardDevol,#cardDes,#cardDestaques{display:none!important}
   .print-head{display:block!important;margin:0 0 8px;border-bottom:2px solid var(--laranja);padding-bottom:7px}
-  .print-head .ph-sub{font-size:11px;color:#2a2a2a;line-height:1.5}
+  .print-head .ph-sub{font-size:11.5px;color:#2a2a2a;line-height:1.55}
   .print-head .ph-sub b{color:var(--navy)}
   /* mapa limpo (maior) + síntese lado a lado */
   .print-destaque{display:grid!important;grid-template-columns:1.25fr 0.75fr;gap:16px;
     margin:0 0 16px;break-inside:avoid;align-items:stretch}
   .pd-mapwrap{border:1px solid var(--linha);border-radius:10px;padding:10px 12px 8px;
     display:flex;flex-direction:column}
-  .pd-maptit{font-size:12.5px;font-weight:700;color:var(--navy);margin:0 0 6px;
+  .pd-maptit{font-size:13px;font-weight:700;color:var(--navy);margin:0 0 6px;
     border-bottom:1px solid var(--linha);padding-bottom:5px}
   .pd-mapwrap svg{width:100%;height:auto;max-height:300px;display:block;flex:1 1 auto}
-  .pd-mapcap{font-size:9px;color:#5B6068;text-align:center;text-transform:uppercase;
+  .pd-mapcap{font-size:9.5px;color:#5B6068;text-align:center;text-transform:uppercase;
     letter-spacing:.3px;margin-top:6px}
   .pd-sintese{border:1px solid var(--linha);border-radius:10px;padding:14px 16px}
-  .pd-sintese h4{color:var(--navy);font-size:11px;text-transform:uppercase;letter-spacing:.4px;margin:0 0 8px}
-  .pd-sintese .narr{font-size:13px;line-height:1.65}
+  .pd-sintese h4{color:var(--navy);font-size:11.5px;text-transform:uppercase;letter-spacing:.4px;margin:0 0 8px}
+  .pd-sintese .narr{font-size:13.5px;line-height:1.68}
   .pd-sintese .narr b{color:var(--navy)} .pd-sintese .narr .real{color:var(--s-transf)}
   .pd-dest{margin-top:12px;border-top:1px solid var(--linha);padding-top:8px}
   .pd-dest h4{color:var(--navy);font-size:11px;text-transform:uppercase;letter-spacing:.4px;margin:0 0 4px}
@@ -349,14 +355,24 @@ table.tab td:nth-child(3){font-weight:500;color:var(--navy)}
   .pd-dest .dest-ic{width:24px;height:24px;font-size:13px}
   .pd-dest .dest-nome{font-size:12px} .pd-dest .dest-val{font-size:12px}
   .lateral{position:static;max-height:none;overflow:visible} .corpo{grid-template-columns:1fr;padding:8px 0 0}
-  .kpis{grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:14px}
-  .kpi{padding:11px 12px;border-left-width:3px}
-  .kpi .v{font-size:17px} .kpi .r{font-size:9.5px} .kpi .sub{font-size:9.5px}
+  /* KPIs em 3 colunas × 2 linhas: em 6 colunas a largura útil do A4 (~188 mm)
+     obrigava fonte minúscula. Com 3 colunas o número respira e fica legível. */
+  .kpis{grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}
+  .kpi{padding:12px 14px;border-left-width:4px}
+  .kpi .v{font-size:22px} .kpi .r{font-size:11.5px} .kpi .sub{font-size:10.5px}
   .grid-cards{grid-template-columns:1fr 1fr;gap:14px}
-  .card{box-shadow:none;border:1px solid var(--linha);break-inside:avoid;padding:11px 13px}
-  .card h3{font-size:11px}
-  .ech{height:230px!important}
-  .dica{margin-top:12px!important;line-height:1.5;font-size:10px}
+  .card{box-shadow:none;border:1px solid var(--linha);break-inside:avoid;padding:12px 14px}
+  .card h3{font-size:13px}
+  /* funil: alvo de leitura no papel — rótulo e valor maiores, barra mais alta */
+  .funil{gap:5px}
+  .funil-row{padding:3px 4px}
+  .funil-lbl{flex:0 0 205px;font-size:12px}
+  .funil-dot{width:12px;height:12px}
+  .funil-bar{height:19px}
+  .funil-val{flex:0 0 150px;font-size:11.5px}
+  .ech{height:235px!important}
+  .dica{margin-top:11px!important;line-height:1.5;font-size:10.5px}
+  .rodape{font-size:10px;padding:10px 16px}
   body{background:#fff}
 }
 
