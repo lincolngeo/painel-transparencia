@@ -22,7 +22,12 @@ var FUNIL=[
 ];
 var GLBL={}; FUNIL.forEach(function(f){GLBL[f.g]=f.lbl;});
 var SUCESSO={transferido:1,formalizacao:1,prestacao:1};
-var DIFIC={rascunho:1,excluido:1};   // "não avançou" — dificuldade do ente
+var DIFIC={rascunho:1,excluido:1};   // "não avançou" — ação do próprio ente
+/* pleitos que não resultaram em recurso, por qualquer via: os que o ente não
+   concluiu (rascunho/excluído) MAIS os indeferidos pela SEDEC. É o indicador
+   composto "sem acesso ao recurso" — sempre exibido decomposto, porque a
+   primeira parcela é ação do ente e a segunda é decisão da SEDEC. */
+var SEMACESSO={rascunho:1,excluido:1,indeferido:1};
 var FASE_NAO='__sem__';              // sentinela: fase da ação não informada
 var REG_COR={'Norte':'#2A78D6','Nordeste':'#EB6834','Centro-Oeste':'#1BAF7A',
   'Sudeste':'#8A6BD1','Sul':'#E87BA4'};
@@ -33,8 +38,9 @@ var MES_LBL=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','
 
 /* ===================== estado ===================== */
 var S={ anos:[], dini:'', dfim:'', regiao:'', uf:'', mun:'', fase:'', fin:'', des:'', grupo:'',
-        metUF:'vlib', metMapa:'vlib', sel:null, _scope:'br',
+        metUF:'vlib', metMapa:'vlib', metAcesso:'n', sel:null, _scope:'br',
         ordCol:'vlib', ordDir:-1, tq:'' };  // anos:[]=todos · dini/dfim=intervalo · tq=busca no tabelão
+        // metAcesso: 'n' = acesso por nº de processos (padrão) · 'v' = por valor (liberado÷solicitado)
 var DADOS=null, META=null, UFGEO=null, ufFeats=[], BUSCA=[], NOME_MUN={};
 var mapa, camadaUF=null, camadaMun=null, munCacheGeo={};
 var chUF, chPz, chSit, chDes, chTempo, chDevol;
@@ -65,7 +71,9 @@ function norm(s){ return (s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLower
 /* ===================== carga ===================== */
 function carrega(){
   Promise.all([
-    fetch('dados/dados.json').then(function(r){return r.json();}),
+    // no-cache: força revalidação do dado consolidado (ETag). Sem isto, uma
+    // atualização do S2iD podia ficar invisível por causa do cache do navegador.
+    fetch('dados/dados.json',{cache:'no-cache'}).then(function(r){return r.json();}),
     fetch('dados/uf.geojson').then(function(r){return r.json();})
   ]).then(function(res){
     DADOS=res[0].processos; META=res[0].meta; UFGEO=res[1]; ufFeats=UFGEO.features;
@@ -125,14 +133,20 @@ function agrupa(arr, chave){
   arr.forEach(function(p){
     var k=p[chave]; if(k==null||k==='') return;
     if(!m[k]) m[k]={ k:k, n:0, fin:0, vlib:0, vsol:0, vcus:0, npes:0,
-                      g:{}, transf:0, suc:0, efetiva:0, dific:0,
+                      g:{}, transf:0, suc:0, efetiva:0, dific:0, indef:0, semac:0,
+                      vsolSuc:0, vlibSuc:0,
                       tsol:[], tana:[], tlib:[], muns:{} };
     var o=m[k]; o.n++; o.g[p.grp]=(o.g[p.grp]||0)+1;
     if(p.trilha==='Financeiro') o.fin++;
     o.vlib+=p.vlib||0; o.vsol+=p.vsol||0; o.vcus+=p.vcus||0; o.npes+=p.npes||0;
     if(p.grp==='transferido') o.transf++;
     if(SUCESSO[p.grp]) o.suc++;                 // acesso pleno (transf+formaliz+prestação)
+    // base do "atendimento do valor": só processos deferidos e com valor pleiteado
+    // declarado — comparar vlib com vsol de pleitos negados/pendentes não faz sentido
+    if(SUCESSO[p.grp] && p.vsol>0){ o.vsolSuc+=p.vsol; o.vlibSuc+=p.vlib||0; }
     if(DIFIC[p.grp]) o.dific++;
+    if(p.grp==='indeferido') o.indef++;
+    if(SEMACESSO[p.grp]) o.semac++;
     if(p.trilha==='Financeiro' && !DIFIC[p.grp]) o.efetiva++;
     if(p.tsol!=null) o.tsol.push(p.tsol);
     if(p.tana!=null) o.tana.push(p.tana);
@@ -144,7 +158,23 @@ function agrupa(arr, chave){
 function sucessoDe(arr){ return arr.reduce(function(a,p){return a+(SUCESSO[p.grp]?1:0);},0); }
 function efetivaDe(arr){ return arr.reduce(function(a,p){return a+((p.trilha==='Financeiro'&&!DIFIC[p.grp])?1:0);},0); }
 function dificDe(arr){ return arr.reduce(function(a,p){return a+(DIFIC[p.grp]?1:0);},0); }
+function indefDe(arr){ return arr.reduce(function(a,p){return a+(p.grp==='indeferido'?1:0);},0); }
+function semacDe(arr){ return arr.reduce(function(a,p){return a+(SEMACESSO[p.grp]?1:0);},0); }
 function finDe(arr){ return arr.reduce(function(a,p){return a+(p.trilha==='Financeiro'?1:0);},0); }
+/* base do atendimento do valor: {vlib, vsol} somados só nos pleitos deferidos
+   que declararam valor solicitado */
+function valSucDe(arr){
+  var vl=0, vs=0;
+  arr.forEach(function(p){ if(SUCESSO[p.grp] && p.vsol>0){ vs+=p.vsol; vl+=p.vlib||0; } });
+  return {vlib:vl, vsol:vs};
+}
+/* percentual de atendimento do valor pleiteado (liberado ÷ solicitado nos deferidos).
+   Teto de 100% na exibição: uns poucos casos passam de 100% por erro de digitação
+   do valor solicitado no S2iD (ex.: pedido lançado como R$ 339 e liberado R$ 63 mil). */
+function pctValor(vlib, vsol){
+  if(!vsol) return null;
+  return Math.round(Math.min(100, 100*vlib/vsol)*10)/10;
+}
 
 /* ===================== render principal ===================== */
 function render(){
@@ -197,12 +227,23 @@ function anoSlug(){
   var a=META.anos||[]; return a.length? a[0]+'-'+a[a.length-1] : 'todos';
 }
 
+/* alternador nº ↔ R$ do indicador de acesso (fica dentro do próprio KPI).
+   Escondido na impressão pelo CSS; os cliques são captados por delegação em #kpis. */
+function togAcesso(){
+  return '<span class="kpi-tog" data-tog="acesso">'+
+    '<button data-a="n"'+(S.metAcesso==='n'?' class="on"':'')+' title="Acesso medido por nº de processos">nº</button>'+
+    '<button data-a="v"'+(S.metAcesso==='v'?' class="on"':'')+' title="Acesso medido por valor: liberado ÷ solicitado">R$</button>'+
+    '</span>';
+}
 /* ---------- KPIs ---------- */
 function kpis(f){
   var vlib=f.reduce(function(a,p){return a+(p.vlib||0);},0);
   var vsol=f.reduce(function(a,p){return a+(p.vsol||0);},0);
   var suc=sucessoDe(f), efe=efetivaDe(f);
   var fin=finDe(f), dif=dificDe(f), ocp=f.length-fin;
+  var ind=indefDe(f), sac=semacDe(f);            // indeferidos e composto "sem acesso"
+  var vS=valSucDe(f), pAtend=pctValor(vS.vlib,vS.vsol);   // atendimento do valor pleiteado
+  var porVal=(S.metAcesso==='v');
   var medSol=mediana(f.map(function(p){return p.tsol;}));
   var medAna=mediana(f.map(function(p){return p.tana;}));
   var medLib=mediana(f.map(function(p){return p.tlib;}));
@@ -212,8 +253,15 @@ function kpis(f){
     ['','v', reaisC(vlib), 'Recurso liberado', suc+' processos com repasse'],
     ['k-laranja','v', reaisC(vsol), 'Valor solicitado', 'demanda dos entes'],
     ['','v', nfmt(f.length), 'Processos', nMun+' municípios'+(ocp?' · '+nfmt(ocp)+' via OCP':'')],
-    ['k-verde','v', pfmt(suc,efe), 'Acesso ao recurso', suc+' de '+efe+' analisados pela SEDEC'],
-    ['k-vermelho','v', pfmt(dif,fin), 'Dificuldade do ente', dif+' rascunhos/excluídos'],
+    // Acesso ao recurso — alterna entre nº de processos e valor atendido (liberado÷pleiteado)
+    ['k-verde','v',
+      (porVal? (pAtend!=null? pAtend.toLocaleString('pt-BR')+'%':'—') : pfmt(suc,efe))+togAcesso(),
+      porVal? 'Atendimento do valor pleiteado' : 'Acesso ao recurso',
+      porVal? (vS.vsol? reaisC(vS.vlib)+' de '+reaisC(vS.vsol)+' pleiteado (deferidos)':'sem valor declarado')
+            : suc+' de '+efe+' analisados pela SEDEC'],
+    // composto: sempre decomposto entre ação do ente e decisão da SEDEC
+    ['k-vermelho','v', pfmt(sac,fin), 'Pleitos sem acesso ao recurso',
+      pfmt(dif,fin)+' não concluídos pelo ente · '+pfmt(ind,fin)+' indeferidos'],
     ['','v', (medSol!=null?nfmt(medSol):'—')+'<small style="font-size:12px"> d</small>', 'Prazo do ente (mediana)', subSedec]
   ];
   document.getElementById('kpis').innerHTML=K.map(function(k){
@@ -445,7 +493,9 @@ function graficoTempo(f){
   });
 }
 
-/* ---------- gráfico: dificuldade do ente (Brasil→UF→municípios) ---------- */
+/* ---------- gráfico: pleitos sem acesso ao recurso (Brasil→UF→municípios) ----------
+   Barra empilhada = indicador composto, sempre decomposto: a parcela que o ente não
+   concluiu (rascunho/excluído) e a parcela indeferida pela SEDEC. Ordena pelo total. */
 function graficoDevol(f){
   var porUF = !S.uf;
   var m=agrupa(f, porUF?'uf':'cd');
@@ -453,9 +503,10 @@ function graficoDevol(f){
     return {k:o.k, nome: porUF? o.k : (NOME_MUN[o.k]||o.k), fin:o.fin,
       ente:pct((o.g.rascunho||0)+(o.g.excluido||0), o.fin),
       ind:pct(o.g.indeferido||0, o.fin)}; })
-    .sort(function(a,b){return (b.ente-a.ente) || (b.ind-a.ind) || (b.fin-a.fin);});
+    .sort(function(a,b){return ((b.ente+b.ind)-(a.ente+a.ind)) || (b.fin-a.fin);});
   document.getElementById('tituloDevol').textContent =
-    porUF? 'Dificuldade do ente — por UF' : 'Dificuldade do ente — municípios de '+S.uf;
+    porUF? 'Pleitos sem acesso ao recurso — por UF'
+         : 'Pleitos sem acesso ao recurso — municípios de '+S.uf;
   // altura dinâmica → rolagem vertical no container (.ech-scroll)
   var el=document.getElementById('chartDevol');
   el.style.height = Math.max(180, arr.length*22 + 42) + 'px';
@@ -469,8 +520,10 @@ function graficoDevol(f){
       formatter:mobD?function(n){return n==='Não avançou (ente)'?'Não avançou':'Indeferido';}:null},
     tooltip:{trigger:'axis',axisPointer:{type:'shadow'},
       formatter:function(ps){ var o=arr[ps[0].dataIndex];
-        return '<b>'+o.nome+'</b><br>Não avançou (rascunho/excluído): '+o.ente+'%<br>'+
-          'Indeferido pela SEDEC: '+o.ind+'%<br>'+nfmt(o.fin)+' processos financeiros'; }},
+        return '<b>'+o.nome+'</b><br>Sem acesso ao recurso: <b>'+
+          (Math.round((o.ente+o.ind)*10)/10).toLocaleString('pt-BR')+'%</b><br>'+
+          '— não concluído pelo ente: '+o.ente+'%<br>'+
+          '— indeferido pela SEDEC: '+o.ind+'%<br>'+nfmt(o.fin)+' processos financeiros'; }},
     xAxis:{type:'value',show:false,max:100},
     yAxis:{type:'category',inverse:true,data:arr.map(function(o){return o.nome;}),axisTick:{show:false},
       axisLine:{show:false},axisLabel:{color:'#5B6068',fontSize:11,fontWeight:500}},
@@ -480,14 +533,17 @@ function graficoDevol(f){
       {name:'Indeferido (SEDEC)',type:'bar',stack:'x',data:arr.map(function(o){return o.ind;}),
         itemStyle:{color:COR.indeferido},barMaxWidth:14,
         label:{show:true,position:'right',color:'#5B6068',fontSize:10,
-          formatter:function(p){var o=arr[p.dataIndex];return (o.ente+o.ind)+'%';}}}]
+          formatter:function(p){var o=arr[p.dataIndex];
+            return (Math.round((o.ente+o.ind)*10)/10).toLocaleString('pt-BR')+'%';}}}]
   });
   chDevol.off('click'); chDevol.on('click',function(p){ var o=arr[p.dataIndex]; if(!o) return;
     if(porUF) setFiltro('uf',o.k); else setFiltro('mun', S.mun===o.k?'':o.k); });
   document.getElementById('dicaDevol').innerHTML=
     '% sobre os processos financeiros '+(porUF?'de cada UF':'de cada município de '+S.uf)+' (exclui OCP). '+
-    '<b>Não avançou</b> = rascunho salvo ou excluído pelo ente (dificuldade do ente); '+
-    '<b>indeferido</b> = negado pela SEDEC. Clique para filtrar · role para ver '+(porUF?'todas as UFs':'todos os municípios')+'.';
+    'O total é a soma de duas parcelas de naturezas distintas, por isso mostradas separadas: '+
+    '<b>não concluído pelo ente</b> = rascunho salvo ou excluído pelo próprio ente; '+
+    '<b>indeferido</b> = decisão da SEDEC. Clique para filtrar · role para ver '+
+    (porUF?'todas as UFs':'todos os municípios')+'.';
 }
 
 /* ===================== mapa (geovisualizador-lite) ===================== */
@@ -576,8 +632,10 @@ function addExportMapa(pos){
 function ehPct(met){ return met==='taxa'||met==='dific'; }
 function rampaDe(met){ return met==='taxa'?RAMPA_VERDE : met==='dific'?RAMPA_VERM : RAMPA_NAVY; }
 function valorMapa(o,met){
-  if(met==='taxa') return pct(o.suc,o.efetiva);
-  if(met==='dific') return pct((o.g.rascunho||0)+(o.g.excluido||0), o.fin);
+  // acesso: por nº de processos ou por valor atendido, conforme o alternador
+  if(met==='taxa') return (S.metAcesso==='v')? pctValor(o.vlibSuc,o.vsolSuc) : pct(o.suc,o.efetiva);
+  // sem acesso: composto (não concluído pelo ente + indeferido pela SEDEC)
+  if(met==='dific') return pct(o.semac, o.fin);
   if(met==='vlib') return o.vlib;
   return o.n;
 }
@@ -620,7 +678,10 @@ function tipUF(ft,o,ly){
   if(o){ h+=linhaTT('Processos',nfmt(o.n)+(o.n-o.fin>0?' ('+nfmt(o.n-o.fin)+' OCP)':''));
     h+=linhaTT('Recurso liberado',reaisC(o.vlib));
     h+=linhaTT('Acesso ao recurso',pfmt(o.suc,o.efetiva));
-    h+=linhaTT('Dificuldade do ente',pfmt(o.dific,o.fin)); }
+    var pv=pctValor(o.vlibSuc,o.vsolSuc);
+    if(pv!=null) h+=linhaTT('Atendimento do valor',pv.toLocaleString('pt-BR')+'%');
+    h+=linhaTT('Sem acesso ao recurso',pfmt(o.semac,o.fin));
+    h+=linhaTT('— não concluído / indeferido',pfmt(o.dific,o.fin)+' / '+pfmt(o.indef,o.fin)); }
   else h+='<div class="tt-linha"><span>sem processos no recorte</span></div>';
   ly.bindTooltip(h,{className:'map-tip',sticky:true}).openTooltip();
 }
@@ -639,7 +700,7 @@ function pintaMun(f,met,reenquadra){
         ly.on('mouseover',function(){ly.setStyle({weight:1.6,color:NAVY});ly.bringToFront();
           var p=ft.properties,h='<div class="tt-nome">'+p.nm+'</div>';
           if(o){h+=linhaTT('Processos',nfmt(o.n));h+=linhaTT('Liberado',reaisC(o.vlib));
-            h+=linhaTT('Dificuldade',pfmt(o.dific,o.fin));}
+            h+=linhaTT('Sem acesso',pfmt(o.semac,o.fin));}
           else h+='<div class="tt-linha"><span>sem processos</span></div>';
           ly.bindTooltip(h,{className:'map-tip',sticky:true}).openTooltip();});
         ly.on('mouseout',function(){camadaMun.resetStyle(ly);ly.closeTooltip();});
@@ -656,7 +717,8 @@ function pintaMun(f,met,reenquadra){
 }
 function legenda(max,met){
   var r=rampaDe(met), el=document.getElementById('mapaLeg');
-  var rot = met==='taxa'?'Acesso ao recurso (%)' : met==='dific'?'Dificuldade do ente — % rascunho/excluído'
+  var rot = met==='taxa'? (S.metAcesso==='v'?'Atendimento do valor pleiteado (%)':'Acesso ao recurso (%)')
+          : met==='dific'?'Sem acesso ao recurso — % não concluído + indeferido'
           : met==='vlib'?'Recurso liberado' : 'Nº de processos';
   var passos=r.map(function(c,i){
     if(ehPct(met)){ var lo=Math.round(100*i/r.length), hi=Math.round(100*(i+1)/r.length);
@@ -682,8 +744,8 @@ function destaques(f){
   if(tLib) items.push(['💰','k-verde','Maior repasse',nome(tLib),reaisC(tLib.vlib)]);
   var tN=topo(function(o){return o.n>0;}, function(o){return o.n;});
   if(tN) items.push(['📋','','Mais processos',nome(tN),nfmt(tN.n)]);
-  var tDif=topo(function(o){return o.fin>=3;}, function(o){return pct(o.dific,o.fin);});
-  if(tDif) items.push(['⚠️','k-vermelho','Maior dificuldade do ente',nome(tDif),pfmt(tDif.dific,tDif.fin)]);
+  var tDif=topo(function(o){return o.fin>=3;}, function(o){return pct(o.semac,o.fin);});
+  if(tDif) items.push(['⚠️','k-vermelho','Mais pleitos sem acesso',nome(tDif),pfmt(tDif.semac,tDif.fin)]);
   var tSol=topo(function(o){return o.tsol.length>=3;}, function(o){return mediana(o.tsol);});
   if(tSol) items.push(['⏱️','','Maior prazo do ente (mediana)',nome(tSol),nfmt(mediana(tSol.tsol))+' d']);
   var cor={'k-verde':'#E7F1EA','k-vermelho':'#FBEDEA','':'#EEF1F6'};
@@ -699,13 +761,17 @@ function narrativa(f){
   var esc = (S.mun? (NOME_MUN[S.mun]||S.mun)+'/'+S.uf : (S.uf||S.regiao||'Brasil'));
   var vlib=f.reduce(function(a,p){return a+(p.vlib||0);},0);
   var suc=sucessoDe(f), efe=efetivaDe(f), dif=dificDe(f), fin=finDe(f);
+  var ind=indefDe(f), sac=semacDe(f);
+  var vS=valSucDe(f), pAtend=pctValor(vS.vlib,vS.vsol);
   var medSol=mediana(f.map(function(p){return p.tsol;}));
   var t='No recorte <b>'+esc+'</b>, foram registrados <b>'+nfmt(f.length)+'</b> processos de resposta';
   if(vlib>0) t+=', com <span class="real">'+reaisC(vlib)+'</span> em recursos federais liberados';
   t+='. ';
   if(efe>0) t+='Das '+nfmt(efe)+' solicitações analisadas pela SEDEC, <b>'+pfmt(suc,efe)+'</b> chegaram ao repasse. ';
-  if(dif>0) t+='<b>'+nfmt(dif)+'</b> processos ('+pfmt(dif,fin)+' dos financeiros) ficaram em rascunho ou '+
-    'foram excluídos pelo ente — sinal de dificuldade em cadastrar/levar adiante a solicitação. ';
+  if(pAtend!=null) t+='Nos pleitos deferidos, o valor liberado correspondeu a <b>'+
+    pAtend.toLocaleString('pt-BR')+'%</b> do que havia sido solicitado. ';
+  if(sac>0) t+='<b>'+nfmt(sac)+'</b> processos ('+pfmt(sac,fin)+' dos financeiros) não resultaram em recurso: '+
+    nfmt(dif)+' não foram concluídos pelo ente (rascunho ou excluído) e '+nfmt(ind)+' foram indeferidos pela SEDEC. ';
   if(medSol!=null) t+='O tempo mediano entre o desastre e a solicitação do ente foi de <b>'+nfmt(medSol)+' dias</b>.';
   document.getElementById('narrTit').textContent='Síntese — '+esc;
   document.getElementById('narr').innerHTML=t;
@@ -806,6 +872,17 @@ function modalSobre(){
     'ente</b> sinalizam dificuldade do município em cadastrar/levar adiante o pedido — quando o ente '+
     'apenas salva ou exclui, e não são gerados números de protocolos. <b>Indeferido</b> é decisão da '+
     'SEDEC; <b>devolvido ao ente</b> aguarda ajustes que, se sanados, permitem prosseguir.</p>'+
+    '<h4>Como ler os dois indicadores de acesso</h4>'+
+    '<p><b>Acesso ao recurso</b> tem duas leituras, alternáveis no próprio indicador: por '+
+    '<b>nº de processos</b> (quantos pleitos analisados chegaram ao repasse) e por <b>valor</b> '+
+    '(quanto do valor pleiteado foi efetivamente liberado, considerando apenas os pleitos deferidos '+
+    'que declararam valor). A segunda leitura revela o que a contagem esconde: um ente pode ter a '+
+    'maioria dos pleitos deferidos e ainda assim receber parte do que solicitou.</p>'+
+    '<p><b>Pleitos sem acesso ao recurso</b> soma as solicitações que não resultaram em repasse, '+
+    'e é sempre apresentado <b>decomposto</b>, porque as duas parcelas têm naturezas distintas: '+
+    'as <b>não concluídas pelo ente</b> (rascunho ou excluído) e as <b>indeferidas pela SEDEC</b>. '+
+    'O total mede a dificuldade de converter a necessidade em recurso; a decomposição preserva a '+
+    'quem cabe cada etapa, sem atribuir a um a decisão do outro.</p>'+
     (N.ocp? '<h4>Operação Carro Pipa (OCP)</h4><div class="tcu-item">'+N.ocp+'</div>':'')+
     (N.finalidade? '<h4>Finalidade (custeio × investimento)</h4><p>'+N.finalidade+'</p>':'')+
     (N.revisoes? '<p style="color:#8A9099;font-size:12px">'+N.revisoes+'</p>':'')+
@@ -863,7 +940,12 @@ function svgMapa(f){
     'preserveAspectRatio="xMidYMid meet" style="width:100%;height:auto;display:block">'+paths+'</svg>';
 }
 var ROT_MET={vlib:'Recurso liberado por local',n:'Nº de processos por local',
-  taxa:'Acesso ao recurso (%)',dific:'Dificuldade do ente (%)'};
+  taxa:'Acesso ao recurso (%)',dific:'Sem acesso ao recurso (%)'};
+/* rótulo da métrica do mapa no PDF, sensível ao alternador nº/R$ */
+function rotMet(met){
+  if(met==='taxa') return (S.metAcesso==='v')? 'Atendimento do valor pleiteado (%)' : 'Acesso ao recurso (%)';
+  return ROT_MET[met]||'';
+}
 
 /* texto legível do recorte ativo (para cabeçalho do PDF e nome dos arquivos) */
 function recorteTexto(){
@@ -890,7 +972,10 @@ function propsGeo(o, nome){
   return { local:nome, uf:o.uf_||undefined, regiao:o.rg||undefined, processos:o.n,
     financeiros:o.fin, recurso_liberado:Math.round((o.vlib||0)*100)/100,
     valor_solicitado:Math.round((o.vsol||0)*100)/100,
-    acesso_pct:pct(o.suc,o.efetiva), dificuldade_pct:pct(o.dific,o.fin),
+    acesso_pct:pct(o.suc,o.efetiva),
+    atendimento_valor_pct:pctValor(o.vlibSuc,o.vsolSuc)||undefined,
+    sem_acesso_pct:pct(o.semac,o.fin),
+    nao_concluido_ente_pct:pct(o.dific,o.fin), indeferido_pct:pct(o.indef,o.fin),
     acessaram_recurso:o.suc }; }
 function fcRecorte(){
   var f=filtra(), porUF=!S.uf;
@@ -932,7 +1017,9 @@ function exportaGeo(fmt){
       '<tr><td>Processos: '+nfmt(p.processos)+'</td></tr>'+
       '<tr><td>Recurso liberado: '+reais(p.recurso_liberado)+'</td></tr>'+
       '<tr><td>Acesso ao recurso: '+p.acesso_pct+'%</td></tr>'+
-      '<tr><td>Dificuldade do ente: '+p.dificuldade_pct+'%</td></tr></table>';
+      (p.atendimento_valor_pct!=null?'<tr><td>Atendimento do valor: '+p.atendimento_valor_pct+'%</td></tr>':'')+
+      '<tr><td>Sem acesso ao recurso: '+p.sem_acesso_pct+'% ('+p.nao_concluido_ente_pct+
+      '% não concluído + '+p.indeferido_pct+'% indeferido)</td></tr></table>';
     kml+='<Placemark><name>'+escX(p.local)+'</name><styleUrl>#e</styleUrl>'+
       '<description><![CDATA['+desc+']]></description>'+geomKML(f.geometry)+'</Placemark>';
   });
@@ -954,7 +1041,7 @@ function exportaPDF(){
     '<div class="pd-mapwrap">'+
       '<div class="pd-maptit">'+terr+' · '+anoTxt()+' · ações de resposta</div>'+
       (mapaSVG||'<div style="color:#8A9099;font-size:11px">mapa indisponível</div>')+
-      '<div class="pd-mapcap">'+(ROT_MET[S.metMapa]||'')+'</div>'+
+      '<div class="pd-mapcap">'+rotMet(S.metMapa)+'</div>'+
     '</div>'+
     '<div class="pd-sintese"><h4>Síntese do recorte</h4><div class="narr">'+
       document.getElementById('narr').innerHTML+'</div>'+
@@ -1044,6 +1131,12 @@ function ligaEventos(){
   document.getElementById('modalFechar').onclick=fechaModal;
   document.getElementById('modalFundo').onclick=function(e){ if(e.target===this) fechaModal(); };
   document.addEventListener('keydown',function(e){ if(e.key==='Escape') fechaModal(); });
+  // alternador nº ↔ R$ do acesso: delegação, porque os KPIs são recriados a cada render
+  document.getElementById('kpis').addEventListener('click',function(e){
+    var b=e.target.closest('.kpi-tog button'); if(!b) return;
+    var v=b.getAttribute('data-a'); if(v===S.metAcesso) return;
+    S.metAcesso=v; render();
+  });
   window.addEventListener('resize',function(){ resizeTudo(); medeTopo(); });
   // impressão/PDF: força os gráficos ao padrão desktop (A4 igual em qualquer tela)
   // e restaura o estilo da tela depois — cobre o botão "Relatório (PDF)" e o Ctrl+P
