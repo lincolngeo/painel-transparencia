@@ -36,7 +36,7 @@
       <b>Lincoln Duques de Barros</b> · Analista de Infraestrutura · SEDEC/MIDR</div>
   </div>
   <nav>
-    <a class="desativado" href="#" id="navReconhec" title="Reconhecimento federal — em elaboração">Reconhecimento <span class="tag-breve">em breve</span></a>
+    <a href="#" id="navReconhec" data-mod="reconhecimento" title="Reconhecimento federal de SE/ECP — o ato que habilita o acesso a recursos">Reconhecimento</a>
     <a class="ativo" href="#" id="navResp" data-mod="resposta" title="Socorro, assistência e restabelecimento">Resposta</a>
     <a href="#" id="navRecon" data-mod="reconstrucao" title="Recuperação de infraestrutura danificada">Reconstrução</a>
     <a href="#" id="navSobre">Sobre</a>
@@ -87,7 +87,7 @@
       <button data-v="__sem__" title="Processos que não avançaram até solicitação/liberação">Não inform.</button>
     </div>
   </div>
-  <div class="fgrupo">
+  <div class="fgrupo" id="grupoFin">
     <label>Finalidade</label>
     <select id="fFin"><option value="">Todas</option>
       <option value="Custeio (corrente)">Custeio (corrente)</option>
@@ -242,7 +242,7 @@
 <script src="libs/leaflet.js"></script>
 <script src="libs/echarts.min.js"></script>
 <script src="libs/fflate.min.js"></script>
-<script src="js/app.js?v=33"></script>
+<script src="js/app.js?v=38"></script>
 <script>
 /* Registro do service worker — habilita instalação no celular (PWA). */
 if ('serviceWorker' in navigator) {

@@ -7,7 +7,8 @@
 /* ===================== paleta / constantes ===================== */
 var NAVY='#272F68', NAVY3='#5E6AA6', LARANJA='#F4A44C';
 var COR={ rascunho:'#B8BDC7', em_analise:'#E8A33D', devolvido:'#EC835A',
-  sobrestado:'#7E8AA0', excluido:'#A9683E', indeferido:'#C0392B', formalizacao:'#3D7BD1',
+  sobrestado:'#7E8AA0', somente_registro:'#B8BDC7', em_andamento:'#E8A33D',
+  nao_reconhecido:'#C0392B', reconhecido:'#1B7A4B', excluido:'#A9683E', indeferido:'#C0392B', formalizacao:'#3D7BD1',
   transferido:'#1B7A4B', prestacao:'#0E5C3A', ocp:'#6B5CA5', outro:'#B8BDC7' };
 
 /* ---------- módulos do painel (abas) ----------
@@ -29,6 +30,20 @@ var MODULOS={
     temFase:false,         // reconstrução não tem fase da ação
     // dimensões que só existem aqui: empenho e repasse em parcelas
     colsExtra:[{k:'vemp',l:'Empenhado',t:'r'},{k:'nparc',l:'Parcelas',t:'n'}]
+  },
+  reconhecimento:{
+    arq:'dados/dados_reconhecimento.json', nome:'Reconhecimento', rot:'reconhecimento federal',
+    // o reconhecimento é o ato que HABILITA o acesso a recursos — não transfere
+    // dinheiro. Logo não há 3º prazo (liberação/licitação) nem indicadores de R$:
+    // a dimensão quantitativa são os danos e prejuízos declarados pelo ente.
+    prazo3:null,
+    temFase:false,
+    semFin:true,           // troca o conjunto de KPIs (ver kpis())
+    grupos:{ sucesso:{reconhecido:1},
+             dific:{somente_registro:1},        // o ente registrou mas não pediu
+             indef:'nao_reconhecido' },         // negativa da União
+    colsExtra:[{k:'seecp',l:'SE/ECP',t:'t'},{k:'port',l:'Portaria',t:'t'},
+               {k:'mortos',l:'Mortos',t:'n'},{k:'desal',l:'Desalojados',t:'n'}]
   }
 };
 var MODULO='resposta';
@@ -40,8 +55,15 @@ function montaFunil(){
   FUNIL=(META.funil||[]).slice();
   GLBL={}; FUNIL.forEach(function(f){GLBL[f.g]=f.lbl;});
 }
-var SUCESSO={transferido:1,formalizacao:1,prestacao:1};
-var DIFIC={rascunho:1,excluido:1};   // "não avançou" — ação do próprio ente
+var SUCESSO_FIN={transferido:1,formalizacao:1,prestacao:1};
+/* conjuntos por módulo: o reconhecimento tem outro vocabulário de desfecho
+   (reconhecido / não reconhecido / somente registro), então quem define é MODULOS */
+function GSUC(){ var g=M().grupos; return g? g.sucesso : SUCESSO_FIN; }
+function GDIF(){ var g=M().grupos; return g? g.dific : DIFIC_FIN; }
+function GIND(){ var g=M().grupos; return g? g.indef : 'indeferido'; }
+var SUCESSO=SUCESSO_FIN;
+var DIFIC_FIN={rascunho:1,excluido:1};   // "não avançou" — ação do próprio ente
+var DIFIC=DIFIC_FIN;
 /* pleitos que não resultaram em recurso, por qualquer via: os que o ente não
    concluiu (rascunho/excluído) MAIS os indeferidos pela SEDEC. É o indicador
    composto "sem acesso ao recurso" — sempre exibido decomposto, porque a
@@ -149,6 +171,33 @@ function indiceBusca(){
   BUSCA=Object.values(vis); BUSCA.forEach(function(m){ NOME_MUN[m.cd]=m.nome; });
   BUSCA.sort(function(a,b){ return b.n-a.n; });
 }
+/* rótulos que dependem do módulo (botões e dicas de card) */
+function rotulaUI(){
+  var rec=M().semFin;
+  var b=document.querySelector('#metUF button[data-v="vlib"]');
+  if(b) b.textContent = rec? 'Prejuízo' : 'R$ liberado';
+  var b2=document.querySelector('#metUF button[data-v="n"]');
+  if(b2) b2.textContent = rec? 'Nº registros' : 'Nº processos';
+  var bm=document.querySelector('#metMapa button[data-v="vlib"]');
+  if(bm) bm.textContent = rec? 'Prejuízo' : 'R$';
+  var bt=document.querySelector('#metMapa button[data-v="taxa"]');
+  if(bt) bt.textContent = rec? '% reconhec.' : '% acesso';
+  var bd=document.querySelector('#metMapa button[data-v="dific"]');
+  if(bd) bd.textContent = rec? 'sem reconhec.' : 'sem acesso';
+  var h=document.querySelector('#cardPrazos .card-hint');
+  if(h) h.textContent = 'mediana + p90 · referência legal '+(META.prazo_legal_solic||90)+'d';
+  var hf=document.querySelector('#cardFunil h3');
+  if(hf) hf.textContent = rec? 'Funil do reconhecimento federal' : 'Funil de admissibilidade dos processos';
+  var hd=document.querySelector('#cardDes h3');
+  if(hd) hd.textContent = rec? 'Registros e danos por tipo de desastre' : 'Processos e recursos por tipo de desastre';
+  var ht=document.querySelector('#cardTempo .card-hint');
+  if(ht) ht.textContent = rec? 'pedidos do ente × reconhecimentos publicados' : 'solicitações do ente × recursos liberados';
+  var hv=document.querySelector('#cardDevol .card-hint');
+  if(hv) hv.textContent = rec? '% sem pedido · % não reconhecido' : '% não concluído pelo ente · % indeferido';
+  // finalidade (custeio/investimento) não existe no reconhecimento
+  var gf=document.getElementById('grupoFin');
+  if(gf) gf.style.display = rec? 'none' : '';
+}
 function montaFiltros(){
   // botões de ano: Todos + 2016..2026 (multisseleção)
   var fa=document.getElementById('fAno');
@@ -166,6 +215,7 @@ function montaFiltros(){
   // "Fase da ação" (socorro/restabelecimento) só existe na Resposta
   var gf=document.getElementById('grupoFase');
   if(gf) gf.style.display = M().temFase ? '' : 'none';
+  rotulaUI();
   var fin=document.getElementById('fFin'); if(fin) fin.value='';
   document.getElementById('fBuscaMun').value='';
   document.getElementById('fBuscaTab').value='';
@@ -200,32 +250,39 @@ function agrupa(arr, chave){
     if(!m[k]) m[k]={ k:k, n:0, fin:0, vlib:0, vsol:0, vcus:0, npes:0,
                       g:{}, transf:0, suc:0, efetiva:0, dific:0, indef:0, semac:0,
                       vsolSuc:0, vlibSuc:0,
+                      mortos:0, desal:0, desab:0, pepl:0, pepr:0, se:0, ecp:0,
                       tsol:[], tana:[], t3:[], muns:{} };
     var o=m[k]; o.n++; o.g[p.grp]=(o.g[p.grp]||0)+1;
-    if(p.trilha==='Financeiro') o.fin++;
+    if(M().semFin || p.trilha==='Financeiro') o.fin++;
     o.vlib+=p.vlib||0; o.vsol+=p.vsol||0; o.vcus+=p.vcus||0; o.npes+=p.npes||0;
     if(p.grp==='transferido') o.transf++;
-    if(SUCESSO[p.grp]) o.suc++;                 // acesso pleno (transf+formaliz+prestação)
+    if(GSUC()[p.grp]) o.suc++;                  // desfecho de sucesso do módulo
     // base do "atendimento do valor": só processos deferidos e com valor pleiteado
     // declarado — comparar vlib com vsol de pleitos negados/pendentes não faz sentido
-    if(SUCESSO[p.grp] && p.vsol>0){ o.vsolSuc+=p.vsol; o.vlibSuc+=p.vlib||0; }
-    if(DIFIC[p.grp]) o.dific++;
-    if(p.grp==='indeferido') o.indef++;
-    if(SEMACESSO[p.grp]) o.semac++;
-    if(p.trilha==='Financeiro' && !DIFIC[p.grp]) o.efetiva++;
+    if(GSUC()[p.grp] && p.vsol>0){ o.vsolSuc+=p.vsol; o.vlibSuc+=p.vlib||0; }
+    if(GDIF()[p.grp]) o.dific++;
+    if(p.grp===GIND()) o.indef++;
+    if(GDIF()[p.grp]||p.grp===GIND()) o.semac++;
+    // danos declarados (só no módulo reconhecimento)
+    o.mortos+=p.mortos||0; o.desal+=p.desal||0; o.desab+=p.desab||0;
+    o.pepl+=p.pepl||0; o.pepr+=p.pepr||0;
+    if(p.seecp==='ECP') o.ecp++; else if(p.seecp==='SE') o.se++;
+    if((M().semFin || p.trilha==='Financeiro') && !GDIF()[p.grp]) o.efetiva++;
     if(p.tsol!=null) o.tsol.push(p.tsol);
     if(p.tana!=null) o.tana.push(p.tana);
-    var v3=p[M().prazo3.k]; if(v3!=null) o.t3.push(v3);   // liberação (Resposta) ou licitação (Reconstrução)
+    if(M().prazo3){ var v3=p[M().prazo3.k]; if(v3!=null) o.t3.push(v3); }   // liberação (Resposta) ou licitação (Reconstrução)
     if(p.cd) o.muns[p.cd]=1;
   });
   return m;
 }
-function sucessoDe(arr){ return arr.reduce(function(a,p){return a+(SUCESSO[p.grp]?1:0);},0); }
-function efetivaDe(arr){ return arr.reduce(function(a,p){return a+((p.trilha==='Financeiro'&&!DIFIC[p.grp])?1:0);},0); }
-function dificDe(arr){ return arr.reduce(function(a,p){return a+(DIFIC[p.grp]?1:0);},0); }
-function indefDe(arr){ return arr.reduce(function(a,p){return a+(p.grp==='indeferido'?1:0);},0); }
-function semacDe(arr){ return arr.reduce(function(a,p){return a+(SEMACESSO[p.grp]?1:0);},0); }
-function finDe(arr){ return arr.reduce(function(a,p){return a+(p.trilha==='Financeiro'?1:0);},0); }
+function sucessoDe(arr){ var S_=GSUC(); return arr.reduce(function(a,p){return a+(S_[p.grp]?1:0);},0); }
+function efetivaDe(arr){ var D_=GDIF(), sf=M().semFin;
+  return arr.reduce(function(a,p){return a+(((sf||p.trilha==='Financeiro') && !D_[p.grp])?1:0);},0); }
+function dificDe(arr){ var D_=GDIF(); return arr.reduce(function(a,p){return a+(D_[p.grp]?1:0);},0); }
+function indefDe(arr){ var I_=GIND(); return arr.reduce(function(a,p){return a+(p.grp===I_?1:0);},0); }
+function semacDe(arr){ var D_=GDIF(), I_=GIND(); return arr.reduce(function(a,p){return a+((D_[p.grp]||p.grp===I_)?1:0);},0); }
+function finDe(arr){ if(M().semFin) return arr.length;
+  return arr.reduce(function(a,p){return a+(p.trilha==='Financeiro'?1:0);},0); }
 /* base do atendimento do valor: {vlib, vsol} somados só nos pleitos deferidos
    que declararam valor solicitado */
 function valSucDe(arr){
@@ -311,12 +368,41 @@ function kpis(f){
   var porVal=(S.metAcesso==='v');
   var medSol=mediana(f.map(function(p){return p.tsol;}));
   var medAna=mediana(f.map(function(p){return p.tana;}));
-  var medLib=mediana(f.map(function(p){return p[M().prazo3.k];}));
+  var medLib=M().prazo3? mediana(f.map(function(p){return p[M().prazo3.k];})) : null;
   var nMun=Object.keys(f.reduce(function(a,p){if(p.cd)a[p.cd]=1;return a;},{})).length;
-  // o 3º prazo é da SEDEC na Resposta (liberação) e do ENTE na Reconstrução (licitação)
-  var rot3=(M().prazo3.k==='tlic')?'licit.':'liber.';
-  var subSedec='SEDEC: '+(medAna!=null?medAna+'d anál.':'—')+
-    ' · '+(medLib!=null?medLib+'d '+rot3:'—')+(M().prazo3.dono==='ente'?' (ente)':'');
+  // o 3º prazo é da SEDEC na Resposta (liberação) e do ENTE na Reconstrução
+  // (licitação); no Reconhecimento ele não existe.
+  var subSedec='SEDEC: '+(medAna!=null?medAna+'d anál.':'—');
+  if(M().prazo3){
+    var rot3=(M().prazo3.k==='tlic')?'licit.':'liber.';
+    subSedec+=' · '+(medLib!=null?medLib+'d '+rot3:'—')+(M().prazo3.dono==='ente'?' (ente)':'');
+  }
+  // ---- RECONHECIMENTO: não há repasse; os KPIs medem o ato e os danos ----
+  if(M().semFin){
+    var rec=suc, nrec=ind, sreg=dif;
+    var decid=rec+nrec;                          // pedidos com decisão da União
+    var vig=(META.vigentes||[]).length;
+    var som=function(c){ return f.reduce(function(a,p){return a+(p[c]||0);},0); };
+    var nECP=f.reduce(function(a,p){return a+(p.seecp==='ECP'?1:0);},0);
+    var nSE =f.reduce(function(a,p){return a+(p.seecp==='SE'?1:0);},0);
+    var Kr=[
+      ['k-verde','v', nfmt(rec), 'Reconhecimentos', nSE+' SE · '+nECP+' ECP'],
+      ['','v', decid? pfmt(rec,decid):'—', 'Taxa de reconhecimento',
+        nfmt(nrec)+' não reconhecidos de '+nfmt(decid)+' decididos'],
+      ['','v', nfmt(f.length), 'Registros no recorte',
+        nMun+' municípios'+(sreg?' · '+nfmt(sreg)+' sem pedido':'')],
+      ['k-laranja','v', nfmt(som('desal')+som('desab')), 'Desalojados e desabrigados',
+        nfmt(som('mortos'))+' mortos declarados'],
+      ['k-vermelho','v', reaisC(som('pepl')+som('pepr')), 'Prejuízo declarado',
+        'público '+reaisC(som('pepl'))+' · privado '+reaisC(som('pepr'))],
+      ['','v', (medSol!=null?nfmt(medSol):'—')+'<small style="font-size:12px"> d</small>',
+        'Prazo do ente (mediana)', subSedec+' · limite legal 10d']
+    ];
+    document.getElementById('kpis').innerHTML=Kr.map(function(k){
+      return '<div class="kpi '+k[0]+'"><div class="v">'+k[2]+'</div><div class="r">'+k[3]+
+             '</div><div class="sub">'+k[4]+'</div></div>'; }).join('');
+    return;
+  }
   var K=[
     ['','v', reaisC(vlib), 'Recurso liberado', suc+' processos com repasse'],
     ['k-laranja','v', reaisC(vsol), 'Valor solicitado', 'demanda dos entes'],
@@ -337,6 +423,20 @@ function kpis(f){
   }).join('');
 }
 
+/* Aviso de lacuna da base: em alguns anos o S2iD não traz certas categorias.
+   Elas NÃO podem ser lidas como zero — o aviso aparece quando o recorte inclui
+   um ano afetado. */
+function avisoLacunas(){
+  var L=META.lacunas; if(!L) return '';
+  var anos=Object.keys(L).filter(function(a){
+    return !S.anos.length || S.anos.indexOf(parseInt(a,10))>=0; });
+  if(!anos.length) return '';
+  var cats={}; anos.forEach(function(a){ (L[a]||[]).forEach(function(g){ cats[g]=1; }); });
+  var nomes=Object.keys(cats).map(function(g){ return GLBL[g]||g; });
+  return '<br><i style="color:#C0392B">Atenção: nos anos '+anos.join(', ')+
+    ' o relatório do S2iD não traz '+nomes.join(' nem ')+
+    ' — a categoria está <b>não informada</b>, não zerada.</i>';
+}
 /* ---------- funil de admissibilidade ---------- */
 function funil(f){
   var cont={}; FUNIL.forEach(function(x){cont[x.g]={n:0,v:0};});
@@ -355,6 +455,14 @@ function funil(f){
     r.onclick=function(){ var g=r.getAttribute('data-g'); setFiltro('grupo', S.grupo===g?'':g); };
   });
   var ocp=(META.n_ocp)||0;
+  if(M().semFin){
+    document.getElementById('dicaFunil').innerHTML=
+      'Leitura neutra/diagnóstica. <b>Somente registro</b> = o ente registrou a ocorrência mas não '+
+      'pediu o reconhecimento — mede a conversão do registro em pedido, não é juízo de valor. '+
+      '<b>Não reconhecido</b> é decisão da União. O reconhecimento <b>habilita</b> o pedido de '+
+      'recursos; ele não transfere valores.'+avisoLacunas();
+    return;
+  }
   document.getElementById('dicaFunil').innerHTML=
     'Leitura neutra/diagnóstica. <b>Rascunho</b> e <b>excluído pelo ente</b> (quando o ente só salva '+
     'ou exclui, não são gerados números de protocolos) sinalizam dificuldade do município em '+
@@ -362,6 +470,7 @@ function funil(f){
     (ocp? '<br><i>OCP ('+nfmt(ocp)+'): Operação Carro Pipa, encaminhada ao Exército — entra na '+
       'contagem, mas fica fora dos indicadores financeiros.</i>':'')+
     // sobrestado só existe na reconstrução: processo suspenso, sem desfecho
+    avisoLacunas()+
     ((cont.sobrestado&&cont.sobrestado.n)? '<br><i>Sobrestado ('+nfmt(cont.sobrestado.n)+'): '+
       'processo suspenso até que se resolva a pendência que o travou — não é indeferimento nem '+
       'desistência, por isso aparece à parte e não conta como pleito sem acesso.</i>':'');
@@ -372,10 +481,11 @@ function graficoUF(f){
   var porUF=!S.uf, met=S.metUF;
   var m=agrupa(f, porUF?'uf':'cd');
   var arr=Object.values(m).map(function(o){ return {k:o.k, nome:porUF?o.k:(NOME_MUN[o.k]||o.k),
-      val: met==='vlib'?o.vlib:o.n, o:o}; })
+      val: met==='vlib'?(M().semFin?(o.pepl+o.pepr):o.vlib):o.n, o:o}; })
     .filter(function(o){return o.val>0;}).sort(function(a,b){return b.val-a.val;});
+  var tU=M().semFin? 'Reconhecimento por' : 'Recursos por';
   document.getElementById('tituloUF').textContent =
-    porUF? 'Recursos por Unidade da Federação' : 'Recursos por município — '+S.uf;
+    porUF? tU+' Unidade da Federação' : tU+' município — '+S.uf;
   var cats=arr.map(function(o,i){return (i+1)+'. '+o.nome;});   // posição no ranking
   var el=document.getElementById('chartUF');
   el.style.height = Math.max(160, arr.length*22 + 26) + 'px';
@@ -387,8 +497,10 @@ function graficoUF(f){
       axisLabel:{color:'#5B6068',fontSize:11,fontWeight:500}},
     tooltip:{trigger:'axis',axisPointer:{type:'shadow'},
       formatter:function(p){var o=arr[p[0].dataIndex];
-        return '<b>'+(p[0].dataIndex+1)+'. '+o.nome+'</b><br>Liberado: '+reais(o.o.vlib)+
-          '<br>Processos: '+nfmt(o.o.n);}},
+        return '<b>'+(p[0].dataIndex+1)+'. '+o.nome+'</b><br>'+
+          (M().semFin? ('Prejuízo declarado: '+reais(o.o.pepl+o.o.pepr)+'<br>Reconhecidos: '+nfmt(o.o.suc)+
+                        '<br>Registros: '+nfmt(o.o.n))
+                     : ('Liberado: '+reais(o.o.vlib)+'<br>Processos: '+nfmt(o.o.n)));}},
     series:[{type:'bar',data:arr.map(function(o){return o.val;}),
       itemStyle:{color:met==='vlib'?NAVY:NAVY3,borderRadius:[0,3,3,0]},barMaxWidth:14,
       label:{show:true,position:'right',color:'#5B6068',fontSize:10,
@@ -417,12 +529,16 @@ function graficosImpressao(){
 function graficoPrazos(f){
   function stat(campo){ var v=f.map(function(p){return p[campo];}).filter(function(x){return x!=null;});
     return {n:v.length, med:mediana(v), p90:pctl(v,.9), avg:media(v), max:v.length?Math.max.apply(null,v):null}; }
-  var st=[stat('tsol'),stat('tana'),stat(M().prazo3.k)];
-  // 3ª categoria conforme o módulo: liberação (Resposta) ou licitação (Reconstrução)
-  var cats=['Solicitação\n(ente)','Análise\n(SEDEC)',M().prazo3.lbl];
-  // % das solicitações do ente dentro do prazo legal de 90 dias
+  var st=[stat('tsol'),stat('tana')];
+  if(M().prazo3) st.push(stat(M().prazo3.k));
+  // 3ª categoria conforme o módulo: liberação (Resposta) ou licitação
+  // (Reconstrução); o Reconhecimento não tem 3º prazo — só duas barras.
+  var cats=['Solicitação\n(ente)','Análise\n(SEDEC)'];
+  if(M().prazo3) cats.push(M().prazo3.lbl);
+  // % das solicitações do ente dentro do prazo legal (90d nas outras frentes, 10d aqui)
   var vsol=f.map(function(p){return p.tsol;}).filter(function(x){return x!=null;});
-  var dentro=vsol.length? Math.round(100*vsol.filter(function(x){return x<=PRAZO_SOLIC_LEGAL;}).length/vsol.length):null;
+  var LIM=(META.prazo_legal_solic||PRAZO_SOLIC_LEGAL);
+  var dentro=vsol.length? Math.round(100*vsol.filter(function(x){return x<=LIM;}).length/vsol.length):null;
   var el=document.getElementById('chartPrazos');
   if(chPz){try{chPz.dispose();}catch(e){}} chPz=echarts.init(el);
   chPz.setOption({
@@ -441,13 +557,24 @@ function graficoPrazos(f){
       {name:'Mediana',type:'bar',data:st.map(function(o){return o.med;}),
         itemStyle:{color:NAVY,borderRadius:[3,3,0,0]},barMaxWidth:26,
         label:{show:true,position:'top',color:'#22252E',fontWeight:700,fontSize:11,formatter:function(p){return p.value==null?'':p.value+'d';}},
-        markLine:{silent:true,symbol:'none',data:[{yAxis:PRAZO_SOLIC_LEGAL}],
+        markLine:{silent:true,symbol:'none',data:[{yAxis:LIM}],
           lineStyle:{color:'#C0392B',type:'dashed',width:1.5},
-          label:{formatter:'prazo legal 90d (recuperação)',color:'#C0392B',fontSize:9.5,position:'insideEndTop'}}},
+          label:{formatter:'prazo legal '+LIM+'d',color:'#C0392B',fontSize:9.5,position:'insideEndTop'}}},
       {name:'p90',type:'bar',data:st.map(function(o){return o.p90;}),
         itemStyle:{color:'#9FA9D2',borderRadius:[3,3,0,0]},barMaxWidth:26,
         label:{show:true,position:'top',color:'#5B6068',fontSize:10,formatter:function(p){return p.value==null?'':p.value+'d';}}}]
   });
+  if(M().semFin){
+    document.getElementById('dicaPrazos').innerHTML=
+      (dentro!=null? '<b>'+dentro+'%</b> dos pedidos foram enviados em até <b>'+LIM+' dias</b> da '+
+        'ocorrência do desastre — prazo legal do requerimento de reconhecimento (Portaria MDR '+
+        '260/2022 consolidada com a 3.646/2022, art. 8º; IN 36/2020). ':'')+
+      '<b>p90</b> = 90% dos casos ficaram até esse valor (revela a cauda). '+
+      'A <b>análise da SEDEC até a publicação no Diário Oficial não tem prazo legal expresso</b> — '+
+      'é apresentada apenas de forma descritiva. Não há terceiro prazo nesta frente: o '+
+      'reconhecimento se encerra na publicação.';
+    return;
+  }
   var recon=(MODULO==='reconstrucao');
   document.getElementById('dicaPrazos').innerHTML=
     (dentro!=null? '<b>'+dentro+'%</b> das solicitações do ente foram enviadas em até <b>90 dias</b> do desastre '+
@@ -531,8 +658,9 @@ function graficoTempo(f){
   if(mensal){
     var ano = listaAnos[0] || S.anos[0] || null;
     sol=new Array(12).fill(0); lib=new Array(12).fill(0);
-    f.forEach(function(p){ var ms=mesDe(p.dsol); if(ms>=0) sol[ms]++;
-      var ml=mesDe(p.dlib); if(ml>=0 && p.vlib) lib[ml]++; });
+    var rec_=M().semFin;
+    f.forEach(function(p){ var ms=mesDe(rec_?p.dprot:p.dsol); if(ms>=0) sol[ms]++;
+      var ml=mesDe(rec_?p.ddou:p.dlib); if(ml>=0 && (rec_? p.grp==='reconhecido' : p.vlib)) lib[ml]++; });
     var ult=0; for(var i=0;i<12;i++){ if(sol[i]||lib[i]) ult=i; }
     cats=MES_LBL.slice(0,ult+1); sol=sol.slice(0,ult+1); lib=lib.slice(0,ult+1);
     sufixo = ano? (' — '+ano):''; granul = ano? ('/'+ano):'';
@@ -540,8 +668,10 @@ function graficoTempo(f){
     var a0=listaAnos[0], a1=listaAnos[listaAnos.length-1];
     cats=[]; for(var y=a0;y<=a1;y++) cats.push(''+y);
     var si={}, li={};
-    f.forEach(function(p){ var ys=p.dsol&&p.dsol.slice(0,4); if(ys) si[ys]=(si[ys]||0)+1;
-      var yl=p.dlib&&p.dlib.slice(0,4); if(yl&&p.vlib) li[yl]=(li[yl]||0)+1; });
+    var rec2=M().semFin;
+    f.forEach(function(p){ var d1=rec2?p.dprot:p.dsol, d2=rec2?p.ddou:p.dlib;
+      var ys=d1&&d1.slice(0,4); if(ys) si[ys]=(si[ys]||0)+1;
+      var yl=d2&&d2.slice(0,4); if(yl&&(rec2? p.grp==='reconhecido' : p.vlib)) li[yl]=(li[yl]||0)+1; });
     sol=cats.map(function(y){return si[y]||0;}); lib=cats.map(function(y){return li[y]||0;});
     sufixo=' — '+a0+'–'+a1; granul='';
   }
@@ -553,7 +683,8 @@ function graficoTempo(f){
   chTempo.setOption({
     animation:!IMP,
     grid:{left:8,right:14,top:mobT?34:30,bottom:20,containLabel:true},
-    legend:{data:['Solicitações do ente','Processos com liberação'],top:0,
+    legend:{data:M().semFin?['Pedidos do ente','Reconhecimentos publicados']
+                            :['Solicitações do ente','Processos com liberação'],top:0,
       left:mobT?'center':'auto',right:mobT?'auto':0,type:'scroll',
       textStyle:{color:'#5B6068',fontSize:mobT?9.5:11},itemWidth:mobT?11:14,itemHeight:8,
       formatter:mobT?function(n){return n==='Solicitações do ente'?'Solicitações':'Liberações';}:null},
@@ -564,10 +695,10 @@ function graficoTempo(f){
     yAxis:{type:'value',name:'nº de processos',nameTextStyle:{color:'#8A9099',fontSize:10},
       splitLine:{lineStyle:{color:'#EEF1F6'}},axisLabel:{color:'#8A9099',fontSize:10}},
     series:[
-      {name:'Solicitações do ente',type:'line',smooth:true,data:sol,
+      {name:M().semFin?'Pedidos do ente':'Solicitações do ente',type:'line',smooth:true,data:sol,
         symbol:'circle',symbolSize:7,lineStyle:{width:2,color:LARANJA},itemStyle:{color:LARANJA},
         areaStyle:{color:'rgba(244,164,76,.12)'}},
-      {name:'Processos com liberação',type:'line',smooth:true,data:lib,
+      {name:M().semFin?'Reconhecimentos publicados':'Processos com liberação',type:'line',smooth:true,data:lib,
         symbol:'circle',symbolSize:7,lineStyle:{width:2,color:'#1B7A4B'},itemStyle:{color:'#1B7A4B'},
         areaStyle:{color:'rgba(27,122,75,.10)'}}]
   });
@@ -581,12 +712,12 @@ function graficoDevol(f){
   var m=agrupa(f, porUF?'uf':'cd');
   var arr=Object.values(m).filter(function(o){return o.fin>=1;}).map(function(o){
     return {k:o.k, nome: porUF? o.k : (NOME_MUN[o.k]||o.k), fin:o.fin,
-      ente:pct((o.g.rascunho||0)+(o.g.excluido||0), o.fin),
-      ind:pct(o.g.indeferido||0, o.fin)}; })
+      ente:pct(o.dific, o.fin),
+      ind:pct(o.indef, o.fin)}; })
     .sort(function(a,b){return ((b.ente+b.ind)-(a.ente+a.ind)) || (b.fin-a.fin);});
+  var tD=M().semFin? 'Pedidos sem reconhecimento' : 'Pleitos sem acesso ao recurso';
   document.getElementById('tituloDevol').textContent =
-    porUF? 'Pleitos sem acesso ao recurso — por UF'
-         : 'Pleitos sem acesso ao recurso — municípios de '+S.uf;
+    porUF? tD+' — por UF' : tD+' — municípios de '+S.uf;
   // altura dinâmica → rolagem vertical no container (.ech-scroll)
   var el=document.getElementById('chartDevol');
   el.style.height = Math.max(180, arr.length*22 + 42) + 'px';
@@ -594,7 +725,8 @@ function graficoDevol(f){
   var mobD=ehMob();
   chDevol.setOption({
     grid:{left:8,right:mobD?36:44,top:mobD?32:28,bottom:6,containLabel:true},
-    legend:{data:['Não avançou (ente)','Indeferido (SEDEC)'],top:0,
+    legend:{data:M().semFin?['Sem pedido (ente)','Não reconhecido (União)']
+                            :['Não avançou (ente)','Indeferido (SEDEC)'],top:0,
       left:mobD?'center':'auto',right:mobD?'auto':0,type:'scroll',
       textStyle:{color:'#5B6068',fontSize:mobD?9.5:11},itemWidth:mobD?11:12,itemHeight:12,
       formatter:mobD?function(n){return n==='Não avançou (ente)'?'Não avançou':'Indeferido';}:null},
@@ -608,9 +740,9 @@ function graficoDevol(f){
     yAxis:{type:'category',inverse:true,data:arr.map(function(o){return o.nome;}),axisTick:{show:false},
       axisLine:{show:false},axisLabel:{color:'#5B6068',fontSize:11,fontWeight:500}},
     series:[
-      {name:'Não avançou (ente)',type:'bar',stack:'x',data:arr.map(function(o){return o.ente;}),
+      {name:M().semFin?'Sem pedido (ente)':'Não avançou (ente)',type:'bar',stack:'x',data:arr.map(function(o){return o.ente;}),
         itemStyle:{color:COR.excluido},barMaxWidth:14},
-      {name:'Indeferido (SEDEC)',type:'bar',stack:'x',data:arr.map(function(o){return o.ind;}),
+      {name:M().semFin?'Não reconhecido (União)':'Indeferido (SEDEC)',type:'bar',stack:'x',data:arr.map(function(o){return o.ind;}),
         itemStyle:{color:COR.indeferido},barMaxWidth:14,
         label:{show:true,position:'right',color:'#5B6068',fontSize:10,
           formatter:function(p){var o=arr[p.dataIndex];
@@ -716,7 +848,7 @@ function valorMapa(o,met){
   if(met==='taxa') return (S.metAcesso==='v')? pctValor(o.vlibSuc,o.vsolSuc) : pct(o.suc,o.efetiva);
   // sem acesso: composto (não concluído pelo ente + indeferido pela SEDEC)
   if(met==='dific') return pct(o.semac, o.fin);
-  if(met==='vlib') return o.vlib;
+  if(met==='vlib') return M().semFin? (o.pepl+o.pepr) : o.vlib;
   return o.n;
 }
 function corEscala(val,max,met){
@@ -757,11 +889,19 @@ function tipUF(ft,o,ly){
   var h='<div class="tt-nome">'+p.nm+' ('+p.uf+')</div>';
   if(o){ h+=linhaTT('Processos',nfmt(o.n)+(o.n-o.fin>0?' ('+nfmt(o.n-o.fin)+' OCP)':''));
     h+=linhaTT('Recurso liberado',reaisC(o.vlib));
-    h+=linhaTT('Acesso ao recurso',pfmt(o.suc,o.efetiva));
-    var pv=pctValor(o.vlibSuc,o.vsolSuc);
-    if(pv!=null) h+=linhaTT('Atendimento do valor',pv.toLocaleString('pt-BR')+'%');
-    h+=linhaTT('Sem acesso ao recurso',pfmt(o.semac,o.fin));
-    h+=linhaTT('— não concluído / indeferido',pfmt(o.dific,o.fin)+' / '+pfmt(o.indef,o.fin)); }
+    if(M().semFin){
+      h+=linhaTT('Reconhecidos',nfmt(o.suc)+' ('+nfmt(o.se)+' SE · '+nfmt(o.ecp)+' ECP)');
+      h+=linhaTT('Taxa de reconhecimento',pfmt(o.suc,o.suc+o.indef));
+      h+=linhaTT('Sem pedido / não reconhecido',pfmt(o.dific,o.fin)+' / '+pfmt(o.indef,o.fin));
+      h+=linhaTT('Desalojados+desabrigados',nfmt(o.desal+o.desab));
+      h+=linhaTT('Prejuízo declarado',reaisC(o.pepl+o.pepr));
+    } else {
+      h+=linhaTT('Acesso ao recurso',pfmt(o.suc,o.efetiva));
+      var pv=pctValor(o.vlibSuc,o.vsolSuc);
+      if(pv!=null) h+=linhaTT('Atendimento do valor',pv.toLocaleString('pt-BR')+'%');
+      h+=linhaTT('Sem acesso ao recurso',pfmt(o.semac,o.fin));
+      h+=linhaTT('— não concluído / indeferido',pfmt(o.dific,o.fin)+' / '+pfmt(o.indef,o.fin));
+    } }
   else h+='<div class="tt-linha"><span>sem processos no recorte</span></div>';
   ly.bindTooltip(h,{className:'map-tip',sticky:true}).openTooltip();
 }
@@ -797,9 +937,13 @@ function pintaMun(f,met,reenquadra){
 }
 function legenda(max,met){
   var r=rampaDe(met), el=document.getElementById('mapaLeg');
-  var rot = met==='taxa'? (S.metAcesso==='v'?'Atendimento do valor pleiteado (%)':'Acesso ao recurso (%)')
-          : met==='dific'?'Sem acesso ao recurso — % não concluído + indeferido'
-          : met==='vlib'?'Recurso liberado' : 'Nº de processos';
+  var rec_=M().semFin;
+  var rot = met==='taxa'? (rec_? 'Taxa de reconhecimento (%)'
+                              : (S.metAcesso==='v'?'Atendimento do valor pleiteado (%)':'Acesso ao recurso (%)'))
+          : met==='dific'? (rec_? 'Sem reconhecimento — % sem pedido + não reconhecido'
+                                : 'Sem acesso ao recurso — % não concluído + indeferido')
+          : met==='vlib'? (rec_? 'Prejuízo declarado (R$)' : 'Recurso liberado')
+          : rec_? 'Nº de registros' : 'Nº de processos';
   var passos=r.map(function(c,i){
     if(ehPct(met)){ var lo=Math.round(100*i/r.length), hi=Math.round(100*(i+1)/r.length);
       return '<span class="lg"><i class="sw" style="background:'+c+'"></i>'+lo+'–'+hi+'</span>'; }
@@ -844,10 +988,29 @@ function narrativa(f){
   var ind=indefDe(f), sac=semacDe(f);
   var vS=valSucDe(f), pAtend=pctValor(vS.vlib,vS.vsol);
   var medSol=mediana(f.map(function(p){return p.tsol;}));
-  var t='No recorte <b>'+esc+'</b>, foram registrados <b>'+nfmt(f.length)+'</b> processos de '+
-    (MODULO==='reconstrucao'?'reconstrução':'resposta');
+  var t='No recorte <b>'+esc+'</b>, '+(M().semFin?'foram registradas ':'foram registrados ')+
+    '<b>'+nfmt(f.length)+'</b> '+(M().semFin?'ocorrências no ':'processos de ')+
+    (MODULO==='reconstrucao'?'reconstrução':MODULO==='reconhecimento'?'reconhecimento':'resposta');
   if(vlib>0) t+=', com <span class="real">'+reaisC(vlib)+'</span> em recursos federais liberados';
   t+='. ';
+  if(M().semFin){
+    // reconhecimento: o desfecho é o ato, não o repasse
+    var decid=suc+ind;
+    if(decid>0) t+='Dos <b>'+nfmt(decid)+'</b> pedidos decididos pela União, <b>'+pfmt(suc,decid)+
+      '</b> foram reconhecidos ('+nfmt(ind)+' não reconhecidos). ';
+    if(dif>0) t+='<b>'+nfmt(dif)+'</b> ocorrências ficaram <b>somente em registro</b>, sem pedido de '+
+      'reconhecimento — leitura diagnóstica da conversão do registro em pedido. ';
+    var som=function(c){ return f.reduce(function(a,p){return a+(p[c]||0);},0); };
+    var prej=som('pepl')+som('pepr');
+    if(prej>0) t+='Os entes declararam <span class="real">'+reaisC(prej)+'</span> de prejuízo '+
+      '(valores nominais, sem correção monetária) e '+nfmt(som('desal')+som('desab'))+
+      ' desalojados e desabrigados. ';
+    if(medSol!=null) t+='O tempo mediano entre o desastre e o pedido foi de <b>'+nfmt(medSol)+
+      ' dias</b> (limite legal: 10).';
+    document.getElementById('narrTit').textContent='Síntese — '+esc;
+    document.getElementById('narr').innerHTML=t;
+    return;
+  }
   if(efe>0) t+='Das '+nfmt(efe)+' solicitações analisadas pela SEDEC, <b>'+pfmt(suc,efe)+'</b> chegaram ao repasse. ';
   if(pAtend!=null) t+='Nos pleitos deferidos, o valor liberado correspondeu a <b>'+
     pAtend.toLocaleString('pt-BR')+'%</b> do que havia sido solicitado. ';
@@ -868,14 +1031,17 @@ function cols(){
     {k:'des',l:'Desastre',t:'t'}
   ];
   if(m.temFase) c.push({k:'fac',l:'Fase',t:'t'});
-  c.push({k:'sit',l:'Situação',t:'s'},
-    {k:'vsol',l:'Solicitado',t:'r'}, {k:'vlib',l:'Liberado',t:'r'});
+  c.push({k:'sit',l:'Situação',t:'s'});
+  if(!m.semFin) c.push({k:'vsol',l:'Solicitado',t:'r'}, {k:'vlib',l:'Liberado',t:'r'});
   m.colsExtra.forEach(function(x){ c.push(x); });
-  c.push({k:'dcri',l:'Criação',t:'d'}, {k:'dsol',l:'Solicitação',t:'d'},
+  if(m.semFin) c.push({k:'ddes',l:'Data desastre',t:'d'}, {k:'ddou',l:'Publicação DOU',t:'d'},
+    {k:'tsol',l:'Dias ente',t:'n'}, {k:'tana',l:'Dias análise',t:'n'},
+    {k:'proc',l:'Processo',t:'t'});
+  else c.push({k:'dcri',l:'Criação',t:'d'}, {k:'dsol',l:'Solicitação',t:'d'},
     {k:'ddes',l:'Data desastre',t:'d'}, {k:'dlib',l:'Liberação',t:'d'},
     {k:'tsol',l:'Dias ente',t:'n'}, {k:'tana',l:'Dias análise',t:'n'},
-    {k:m.prazo3.k, l:m.prazo3.col, t:'n'},
     {k:'proc',l:'Processo',t:'t'});
+  if(m.prazo3) c.splice(c.length-1,0,{k:m.prazo3.k, l:m.prazo3.col, t:'n'});
   return c;
 }
 function dbr(iso){ return iso? iso.split('-').reverse().join('/') : '—'; }
@@ -939,7 +1105,8 @@ function modalSobre(){
     '<p>Após um desastre, o apoio federal ao ente segue um fluxo, todo registrado no S2iD:</p>'+
     '<div class="tcu-item"><b>1. Reconhecimento federal</b> — ato inicial: o município/estado declara '+
     'situação de emergência ou estado de calamidade pública e solicita à União o reconhecimento, que '+
-    'habilita o acesso a recursos e medidas federais. <i>(frente em elaboração)</i></div>'+
+    'habilita o acesso a recursos e medidas federais.'+
+    (MODULO==='reconhecimento'? ' <b>É a aba aberta agora.</b>':' <i>(disponível na aba Reconhecimento)</i>')+'</div>'+
     '<div class="tcu-item"><b>2. Ações de resposta</b> — socorro, assistência às vítimas e '+
     'restabelecimento dos serviços essenciais. <i>(aba Resposta)</i></div>'+
     '<div class="tcu-item"><b>3. Ações de reconstrução</b> — recuperação da infraestrutura pública '+
@@ -1045,7 +1212,7 @@ function modalSobre(){
 function exportaCSV(){
   var f=filtra();
   var cols=['uf','mun','cd','rg','des','fac','fin','sit','fase','proc','prot',
-    'dcri','dsol','ddes','vsol','vlib','vcus','npes','gnd','fnt','tsol','tana',M().prazo3.k,'anl'];
+    'dcri','dsol','ddes','vsol','vlib','vcus','npes','gnd','fnt','tsol','tana','anl'].concat(M().prazo3?[M().prazo3.k]:[]);
   var head=cols.join(';');
   var linhas=f.map(function(p){ return cols.map(function(c){
     var v=p[c]==null?'':p[c]; if(typeof v==='string'&&/[;"\n]/.test(v)) v='"'+v.replace(/"/g,'""')+'"';
@@ -1088,8 +1255,11 @@ function svgMapa(f){
 }
 var ROT_MET={vlib:'Recurso liberado por local',n:'Nº de processos por local',
   taxa:'Acesso ao recurso (%)',dific:'Sem acesso ao recurso (%)'};
+var ROT_MET_REC={vlib:'Prejuízo declarado por local',n:'Nº de registros por local',
+  taxa:'Taxa de reconhecimento (%)',dific:'Sem reconhecimento (%)'};
 /* rótulo da métrica do mapa no PDF, sensível ao alternador nº/R$ */
 function rotMet(met){
+  if(M().semFin) return ROT_MET_REC[met]||'';
   if(met==='taxa') return (S.metAcesso==='v')? 'Atendimento do valor pleiteado (%)' : 'Acesso ao recurso (%)';
   return ROT_MET[met]||'';
 }
@@ -1180,7 +1350,7 @@ function exportaPDF(){
   var f=filtra();
   document.getElementById('printHead').innerHTML=
     '<div class="ph-sub"><b>Recorte:</b> '+rec+' · '+anoTxt()+' · Ações de '+
-      (MODULO==='reconstrucao'?'reconstrução':'resposta')+'</div>'+
+      (MODULO==='reconstrucao'?'reconstrução':MODULO==='reconhecimento'?'reconhecimento federal':'resposta')+'</div>'+
     '<div class="ph-sub">Fonte: '+META.fonte+' · Gerado em '+dbr(META.data_geracao)+'. '+
     'Detalhamento processo a processo disponível na exportação CSV.</div>';
   var terr = S.mun? (NOME_MUN[S.mun]||S.mun)+'/'+S.uf : S.uf? 'UF '+S.uf : S.regiao? 'Região '+S.regiao : 'Brasil';
@@ -1196,7 +1366,7 @@ function exportaPDF(){
       '<div class="pd-dest"><h4>Destaques do recorte</h4>'+
       document.getElementById('destaques').innerHTML+'</div></div>';
   var t0=document.title;
-  document.title='Transparencia_SEDEC_'+(MODULO==='reconstrucao'?'Reconstrucao_':'Resposta_')+anoSlug()+'_'+slug(rec);
+  document.title='Transparencia_SEDEC_'+(MODULO==='reconstrucao'?'Reconstrucao_':MODULO==='reconhecimento'?'Reconhecimento_':'Resposta_')+anoSlug()+'_'+slug(rec);
   var restore=function(){ document.title=t0; window.removeEventListener('afterprint',restore); };
   window.addEventListener('afterprint',restore);
   setTimeout(function(){ [chUF,chPz,chSit,chDes,chTempo,chDevol].forEach(function(c){if(c)try{c.resize();}catch(e){}});
@@ -1282,7 +1452,6 @@ function ligaEventos(){
   document.querySelectorAll('nav a[data-mod]').forEach(function(a){
     a.onclick=function(e){ e.preventDefault(); trocaModulo(a.getAttribute('data-mod')); };
   });
-  document.getElementById('navReconhec').onclick=function(e){e.preventDefault();};
   document.getElementById('modalFechar').onclick=fechaModal;
   document.getElementById('modalFundo').onclick=function(e){ if(e.target===this) fechaModal(); };
   document.addEventListener('keydown',function(e){ if(e.key==='Escape') fechaModal(); });

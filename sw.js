@@ -8,7 +8,7 @@
    - domínios externos (tiles Esri/CARTO/OSM): não intercepta (rede padrão).
    Ao editar arquivos do painel, incremente CACHE para limpar o cache antigo. */
 'use strict';
-var CACHE = 'painel-transparencia-v13';
+var CACHE = 'painel-transparencia-v18';
 
 // itens do "app shell" pré-cacheados na instalação (tolerante a falhas individuais)
 var SHELL = [
@@ -16,7 +16,7 @@ var SHELL = [
   './index.html',
   './manifest.json',
   './css/estilo.css?v=27',
-  './js/app.js?v=33',
+  './js/app.js?v=38',
   './libs/leaflet.css',
   './libs/leaflet.js',
   './libs/echarts.min.js',
@@ -54,9 +54,10 @@ self.addEventListener('activate', function (e) {
 function ehMalha(url) {
   return /\/dados\/.*\.geojson$/.test(url.pathname);
 }
-/* o dado consolidado do S2iD: muda a cada atualização -> network-first */
+/* os dados consolidados do S2iD (um por frente: dados.json, dados_reconstrucao.json,
+   dados_reconhecimento.json) mudam a cada atualização -> network-first */
 function ehDadosVivos(url) {
-  return /\/dados\/dados\.json$/.test(url.pathname);
+  return /\/dados\/dados(_[a-z]+)?\.json$/.test(url.pathname);
 }
 
 self.addEventListener('fetch', function (e) {
