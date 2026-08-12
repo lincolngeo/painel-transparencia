@@ -7,20 +7,39 @@
 /* ===================== paleta / constantes ===================== */
 var NAVY='#272F68', NAVY3='#5E6AA6', LARANJA='#F4A44C';
 var COR={ rascunho:'#B8BDC7', em_analise:'#E8A33D', devolvido:'#EC835A',
-  excluido:'#A9683E', indeferido:'#C0392B', formalizacao:'#3D7BD1',
+  sobrestado:'#7E8AA0', excluido:'#A9683E', indeferido:'#C0392B', formalizacao:'#3D7BD1',
   transferido:'#1B7A4B', prestacao:'#0E5C3A', ocp:'#6B5CA5', outro:'#B8BDC7' };
-var FUNIL=[
-  {g:'rascunho',     lbl:'Rascunho (salvo, não enviado)'},
-  {g:'em_analise',   lbl:'Em análise na SEDEC'},
-  {g:'devolvido',    lbl:'Devolvido ao ente (ajustes)'},
-  {g:'excluido',     lbl:'Excluído pelo ente'},
-  {g:'indeferido',   lbl:'Indeferido pela SEDEC'},
-  {g:'formalizacao', lbl:'Aprovado — em formalização'},
-  {g:'transferido',  lbl:'Recurso transferido'},
-  {g:'prestacao',    lbl:'Prestação de contas'},
-  {g:'ocp',          lbl:'OCP — encaminhada ao Exército'}
-];
-var GLBL={}; FUNIL.forEach(function(f){GLBL[f.g]=f.lbl;});
+
+/* ---------- módulos do painel (abas) ----------
+   Cada frente do S2iD tem seu próprio dado consolidado e algumas diferenças de
+   estrutura. O que varia entre elas fica DECLARADO aqui; o resto do código é o
+   mesmo. O funil vem do próprio dado (meta.funil), gerado pelo ETL. */
+var MODULOS={
+  resposta:{
+    arq:'dados/dados.json', nome:'Resposta', rot:'ações de resposta',
+    // 3ª barra do gráfico de prazos: na Resposta é a liberação do recurso
+    prazo3:{k:'tlib', lbl:'Liberação\n(SEDEC)', col:'Dias liber.', dono:'SEDEC'},
+    temFase:true,          // filtro "Fase da ação" (socorro/restabelecimento)
+    colsExtra:[]
+  },
+  reconstrucao:{
+    arq:'dados/dados_reconstrucao.json', nome:'Reconstrução', rot:'ações de reconstrução',
+    // na Reconstrução não existe prazo de liberação; existe o de LICITAÇÃO (do ente)
+    prazo3:{k:'tlic', lbl:'Licitação\n(ente)', col:'Dias licit.', dono:'ente'},
+    temFase:false,         // reconstrução não tem fase da ação
+    // dimensões que só existem aqui: empenho e repasse em parcelas
+    colsExtra:[{k:'vemp',l:'Empenhado',t:'r'},{k:'nparc',l:'Parcelas',t:'n'}]
+  }
+};
+var MODULO='resposta';
+function M(){ return MODULOS[MODULO]; }
+
+/* FUNIL/GLBL são preenchidos a partir de meta.funil ao carregar cada módulo */
+var FUNIL=[], GLBL={};
+function montaFunil(){
+  FUNIL=(META.funil||[]).slice();
+  GLBL={}; FUNIL.forEach(function(f){GLBL[f.g]=f.lbl;});
+}
 var SUCESSO={transferido:1,formalizacao:1,prestacao:1};
 var DIFIC={rascunho:1,excluido:1};   // "não avançou" — ação do próprio ente
 /* pleitos que não resultaram em recurso, por qualquer via: os que o ente não
@@ -69,24 +88,55 @@ var PRAZO_SOLIC_LEGAL=90;   // dias — plano de trabalho p/ recuperação (Lei 
 function norm(s){ return (s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase(); }
 
 /* ===================== carga ===================== */
+function subtituloMod(){
+  // a data da consolidação fica À VISTA no subtítulo: se o painel estiver
+  // servindo uma cópia velha (cache), isso salta aos olhos na hora
+  document.getElementById('subTit').innerHTML=META.subtitulo+
+    ' · <b title="Data em que as planilhas do S2iD foram consolidadas">dados de '+
+    dbr(META.data_geracao)+'</b>';
+}
 function carrega(){
   Promise.all([
     // no-cache: força revalidação do dado consolidado (ETag). Sem isto, uma
     // atualização do S2iD podia ficar invisível por causa do cache do navegador.
-    fetch('dados/dados.json',{cache:'no-cache'}).then(function(r){return r.json();}),
+    fetch(M().arq,{cache:'no-cache'}).then(function(r){return r.json();}),
     fetch('dados/uf.geojson').then(function(r){return r.json();})
   ]).then(function(res){
     DADOS=res[0].processos; META=res[0].meta; UFGEO=res[1]; ufFeats=UFGEO.features;
-    // a data da consolidação fica À VISTA no subtítulo: se o painel estiver
-    // servindo uma cópia velha (cache), isso salta aos olhos na hora
-    document.getElementById('subTit').innerHTML=META.subtitulo+
-      ' · <b title="Data em que as planilhas do S2iD foram consolidadas">dados de '+
-      dbr(META.data_geracao)+'</b>';
+    montaFunil(); subtituloMod();
     indiceBusca();
     montaFiltros(); iniciaMapa(); ligaEventos(); render();
     rodape();
   }).catch(function(e){
     document.getElementById('load').innerHTML='<span style="color:#C0392B">Erro ao carregar dados.<br>Abra via abrir_painel.bat (não file://).</span>';
+
+    console.error(e);
+  });
+}
+
+/* troca de aba (módulo): recarrega só o dado consolidado e refaz a tela.
+   O mapa e a malha do IBGE são reaproveitados — não precisam ser rebaixados. */
+function trocaModulo(novo){
+  if(novo===MODULO || !MODULOS[novo]) return;
+  MODULO=novo;
+  document.querySelectorAll('nav a[data-mod]').forEach(function(a){
+    a.classList.toggle('ativo', a.getAttribute('data-mod')===MODULO);
+  });
+  var lo=document.getElementById('load');
+  if(lo){ lo.style.display='flex'; lo.innerHTML='<span>Carregando '+M().nome+'…</span>'; }
+  fetch(M().arq,{cache:'no-cache'}).then(function(r){return r.json();}).then(function(j){
+    DADOS=j.processos; META=j.meta;
+    montaFunil(); subtituloMod();
+    // zera o recorte: os vocabulários (UF, desastre, anos) mudam entre módulos
+    S={anos:[],dini:'',dfim:'',regiao:'',uf:'',mun:'',fase:'',fin:'',des:'',grupo:'',tq:'',
+       metUF:S.metUF,metMapa:S.metMapa,metAcesso:S.metAcesso,sel:null,_scope:'br',
+       ordCol:S.ordCol,ordDir:S.ordDir};
+    NOME_MUN={}; indiceBusca();
+    montaFiltros();
+    if(lo) lo.style.display='none';
+    reenquadraMapa(); render(); rodape();
+  }).catch(function(e){
+    if(lo) lo.innerHTML='<span style="color:#C0392B">Erro ao carregar '+M().nome+'.</span>';
     console.error(e);
   });
 }
@@ -108,9 +158,20 @@ function montaFiltros(){
   var di=document.getElementById('fDini'), df=document.getElementById('fDfim');
   if(META.data_min){ di.min=df.min=META.data_min; di.max=df.max=META.data_max; }
   var uf=document.getElementById('fUF');
+  uf.innerHTML='<option value="">Todas</option>';
   META.ufs.forEach(function(u){ var o=document.createElement('option'); o.value=u; o.textContent=u; uf.appendChild(o); });
   var des=document.getElementById('fDes');
+  des.innerHTML='<option value="">Todos</option>';
   META.desastres.slice().sort().forEach(function(d){ var o=document.createElement('option'); o.value=d; o.textContent=d; des.appendChild(o); });
+  // "Fase da ação" (socorro/restabelecimento) só existe na Resposta
+  var gf=document.getElementById('grupoFase');
+  if(gf) gf.style.display = M().temFase ? '' : 'none';
+  var fin=document.getElementById('fFin'); if(fin) fin.value='';
+  document.getElementById('fBuscaMun').value='';
+  document.getElementById('fBuscaTab').value='';
+  document.getElementById('fDini').value=''; document.getElementById('fDfim').value='';
+  ['fRegiao','fFase'].forEach(function(id){ segOn(id,''); });
+  aplicaAnosUI();
 }
 
 /* ===================== filtro ===================== */
@@ -139,7 +200,7 @@ function agrupa(arr, chave){
     if(!m[k]) m[k]={ k:k, n:0, fin:0, vlib:0, vsol:0, vcus:0, npes:0,
                       g:{}, transf:0, suc:0, efetiva:0, dific:0, indef:0, semac:0,
                       vsolSuc:0, vlibSuc:0,
-                      tsol:[], tana:[], tlib:[], muns:{} };
+                      tsol:[], tana:[], t3:[], muns:{} };
     var o=m[k]; o.n++; o.g[p.grp]=(o.g[p.grp]||0)+1;
     if(p.trilha==='Financeiro') o.fin++;
     o.vlib+=p.vlib||0; o.vsol+=p.vsol||0; o.vcus+=p.vcus||0; o.npes+=p.npes||0;
@@ -154,7 +215,7 @@ function agrupa(arr, chave){
     if(p.trilha==='Financeiro' && !DIFIC[p.grp]) o.efetiva++;
     if(p.tsol!=null) o.tsol.push(p.tsol);
     if(p.tana!=null) o.tana.push(p.tana);
-    if(p.tlib!=null) o.tlib.push(p.tlib);
+    var v3=p[M().prazo3.k]; if(v3!=null) o.t3.push(v3);   // liberação (Resposta) ou licitação (Reconstrução)
     if(p.cd) o.muns[p.cd]=1;
   });
   return m;
@@ -250,7 +311,7 @@ function kpis(f){
   var porVal=(S.metAcesso==='v');
   var medSol=mediana(f.map(function(p){return p.tsol;}));
   var medAna=mediana(f.map(function(p){return p.tana;}));
-  var medLib=mediana(f.map(function(p){return p.tlib;}));
+  var medLib=mediana(f.map(function(p){return p[M().prazo3.k];}));
   var nMun=Object.keys(f.reduce(function(a,p){if(p.cd)a[p.cd]=1;return a;},{})).length;
   var subSedec='SEDEC: '+(medAna!=null?medAna+'d anál.':'—')+' · '+(medLib!=null?medLib+'d liber.':'—');
   var K=[
@@ -296,7 +357,11 @@ function funil(f){
     'ou exclui, não são gerados números de protocolos) sinalizam dificuldade do município em '+
     'cadastrar/levar adiante a solicitação. <b>Indeferido</b> é decisão da SEDEC. '+
     (ocp? '<br><i>OCP ('+nfmt(ocp)+'): Operação Carro Pipa, encaminhada ao Exército — entra na '+
-      'contagem, mas fica fora dos indicadores financeiros.</i>':'');
+      'contagem, mas fica fora dos indicadores financeiros.</i>':'')+
+    // sobrestado só existe na reconstrução: processo suspenso, sem desfecho
+    ((cont.sobrestado&&cont.sobrestado.n)? '<br><i>Sobrestado ('+nfmt(cont.sobrestado.n)+'): '+
+      'processo suspenso até que se resolva a pendência que o travou — não é indeferimento nem '+
+      'desistência, por isso aparece à parte e não conta como pleito sem acesso.</i>':'');
 }
 
 /* ---------- ranking: recursos por UF (→ municípios ao entrar numa UF) ---------- */
@@ -349,7 +414,7 @@ function graficosImpressao(){
 function graficoPrazos(f){
   function stat(campo){ var v=f.map(function(p){return p[campo];}).filter(function(x){return x!=null;});
     return {n:v.length, med:mediana(v), p90:pctl(v,.9), avg:media(v), max:v.length?Math.max.apply(null,v):null}; }
-  var st=[stat('tsol'),stat('tana'),stat('tlib')];
+  var st=[stat('tsol'),stat('tana'),stat(M().prazo3.k)];
   var cats=['Solicitação\n(ente)','Análise\n(SEDEC)','Liberação\n(SEDEC)'];
   // % das solicitações do ente dentro do prazo legal de 90 dias
   var vsol=f.map(function(p){return p.tsol;}).filter(function(x){return x!=null;});
@@ -379,12 +444,19 @@ function graficoPrazos(f){
         itemStyle:{color:'#9FA9D2',borderRadius:[3,3,0,0]},barMaxWidth:26,
         label:{show:true,position:'top',color:'#5B6068',fontSize:10,formatter:function(p){return p.value==null?'':p.value+'d';}}}]
   });
+  var recon=(MODULO==='reconstrucao');
   document.getElementById('dicaPrazos').innerHTML=
     (dentro!=null? '<b>'+dentro+'%</b> das solicitações do ente foram enviadas em até <b>90 dias</b> do desastre '+
-      '(prazo legal do plano de trabalho de recuperação — Lei 12.340/2010 e Portaria 3.033/2020; '+
-      'dispensado no socorro/assistência imediatos). ':'')+
+      '(prazo legal do plano de trabalho — Lei 12.340/2010 e Portaria 3.033/2020, art. 4º'+
+      (recon? '; na reconstrução ele se aplica integralmente'
+            : '; dispensado no socorro/assistência imediatos')+'). ':'')+
     '<b>p90</b> = 90% dos casos ficaram até esse valor (revela a cauda). '+
-    'A <b>análise e a liberação da SEDEC não têm prazo legal expresso</b> — mostradas apenas de forma descritiva.';
+    (recon
+      ? 'A <b>análise da SEDEC não tem prazo legal expresso</b> — é descritiva. Para a '+
+        '<b>licitação</b>, que é obrigação do ente, também não há número fixo em lei: vale o prazo '+
+        'estipulado no documento que autorizou seu início, e o empenho pode ser cancelado se o ente '+
+        'não concluir nem apresentar justificativa técnica (Portaria 3.033/2020).'
+      : 'A <b>análise e a liberação da SEDEC não têm prazo legal expresso</b> — mostradas apenas de forma descritiva.');
 }
 
 /* ---------- gráfico: situação (donut) ---------- */
@@ -768,7 +840,8 @@ function narrativa(f){
   var ind=indefDe(f), sac=semacDe(f);
   var vS=valSucDe(f), pAtend=pctValor(vS.vlib,vS.vsol);
   var medSol=mediana(f.map(function(p){return p.tsol;}));
-  var t='No recorte <b>'+esc+'</b>, foram registrados <b>'+nfmt(f.length)+'</b> processos de resposta';
+  var t='No recorte <b>'+esc+'</b>, foram registrados <b>'+nfmt(f.length)+'</b> processos de '+
+    (MODULO==='reconstrucao'?'reconstrução':'resposta');
   if(vlib>0) t+=', com <span class="real">'+reaisC(vlib)+'</span> em recursos federais liberados';
   t+='. ';
   if(efe>0) t+='Das '+nfmt(efe)+' solicitações analisadas pela SEDEC, <b>'+pfmt(suc,efe)+'</b> chegaram ao repasse. ';
@@ -782,15 +855,25 @@ function narrativa(f){
 }
 
 /* ===================== tabelão (detalhamento) ===================== */
-var COLS=[
-  {k:'prot',l:'Protocolo',t:'t'}, {k:'uf',l:'UF',t:'t'}, {k:'mun',l:'Município',t:'t'},
-  {k:'des',l:'Desastre',t:'t'}, {k:'fac',l:'Fase',t:'t'}, {k:'sit',l:'Situação',t:'s'},
-  {k:'vsol',l:'Solicitado',t:'r'}, {k:'vlib',l:'Liberado',t:'r'},
-  {k:'dcri',l:'Criação',t:'d'}, {k:'dsol',l:'Solicitação',t:'d'},
-  {k:'ddes',l:'Data desastre',t:'d'}, {k:'dlib',l:'Liberação',t:'d'},
-  {k:'tsol',l:'Dias ente',t:'n'}, {k:'tana',l:'Dias análise',t:'n'}, {k:'tlib',l:'Dias liber.',t:'n'},
-  {k:'proc',l:'Processo',t:'t'}
-];
+/* colunas do tabelão — montadas conforme o módulo ativo: a Resposta tem "Fase da
+   ação" e prazo de liberação; a Reconstrução tem empenho, parcelas e o prazo de
+   licitação no lugar. */
+function cols(){
+  var m=M(), c=[
+    {k:'prot',l:'Protocolo',t:'t'}, {k:'uf',l:'UF',t:'t'}, {k:'mun',l:'Município',t:'t'},
+    {k:'des',l:'Desastre',t:'t'}
+  ];
+  if(m.temFase) c.push({k:'fac',l:'Fase',t:'t'});
+  c.push({k:'sit',l:'Situação',t:'s'},
+    {k:'vsol',l:'Solicitado',t:'r'}, {k:'vlib',l:'Liberado',t:'r'});
+  m.colsExtra.forEach(function(x){ c.push(x); });
+  c.push({k:'dcri',l:'Criação',t:'d'}, {k:'dsol',l:'Solicitação',t:'d'},
+    {k:'ddes',l:'Data desastre',t:'d'}, {k:'dlib',l:'Liberação',t:'d'},
+    {k:'tsol',l:'Dias ente',t:'n'}, {k:'tana',l:'Dias análise',t:'n'},
+    {k:m.prazo3.k, l:m.prazo3.col, t:'n'},
+    {k:'proc',l:'Processo',t:'t'});
+  return c;
+}
 function dbr(iso){ return iso? iso.split('-').reverse().join('/') : '—'; }
 function fmtCel(p,c){
   var v=p[c.k];
@@ -811,11 +894,12 @@ function tabela(f){
     if(typeof va==='number'||typeof vb==='number') return (va-vb)*dir;
     return (''+va).localeCompare(''+vb,'pt-BR')*dir;
   });
-  var head=COLS.map(function(c){ var ar=col===c.k?(dir<0?' ▼':' ▲'):'';
+  var CL=cols();
+  var head=CL.map(function(c){ var ar=col===c.k?(dir<0?' ▼':' ▲'):'';
     return '<th data-k="'+c.k+'" class="'+((c.t==='r'||c.t==='n')?'n':'')+(col===c.k?' ord':'')+'">'+c.l+ar+'</th>'; }).join('');
   var LIM=1000, cap = q? ord.length : Math.min(LIM, ord.length);   // busca mostra todos os achados
   var rows=ord.slice(0,cap).map(function(p){
-    return '<tr>'+COLS.map(function(c){ return '<td class="'+((c.t==='r'||c.t==='n')?'n':'')+'">'+fmtCel(p,c)+'</td>'; }).join('')+'</tr>'; }).join('');
+    return '<tr>'+CL.map(function(c){ return '<td class="'+((c.t==='r'||c.t==='n')?'n':'')+'">'+fmtCel(p,c)+'</td>'; }).join('')+'</tr>'; }).join('');
   document.getElementById('tabelaHead').innerHTML='<tr>'+head+'</tr>';
   document.getElementById('tabelaBody').innerHTML=rows || '<tr><td colspan="16" style="padding:12px;color:#8A9099">Nenhum processo encontrado.</td></tr>';
   var info;
@@ -853,11 +937,21 @@ function modalSobre(){
     'situação de emergência ou estado de calamidade pública e solicita à União o reconhecimento, que '+
     'habilita o acesso a recursos e medidas federais. <i>(frente em elaboração)</i></div>'+
     '<div class="tcu-item"><b>2. Ações de resposta</b> — socorro, assistência às vítimas e '+
-    'restabelecimento dos serviços essenciais. <b>É o recorte deste piloto.</b></div>'+
+    'restabelecimento dos serviços essenciais.'+
+    (MODULO==='resposta'? ' <b>É a aba aberta agora.</b>':' <i>(disponível na aba Resposta)</i>')+'</div>'+
     '<div class="tcu-item"><b>3. Ações de reconstrução</b> — recuperação da infraestrutura pública '+
-    'danificada ou destruída. <i>(frente em elaboração)</i></div>'+
-    '<p>Este piloto cobre as <b>ações de resposta</b> (área de origem do trabalho); as demais frentes '+
-    'serão incorporadas para que o painel reflita todas as ações da SEDEC.</p>'+
+    'danificada ou destruída, com plano de trabalho, licitação da obra pelo ente e repasse em parcelas.'+
+    (MODULO==='reconstrucao'? ' <b>É a aba aberta agora.</b>':' <i>(disponível na aba Reconstrução)</i>')+'</div>'+
+    '<p>O painel já cobre <b>resposta</b> e <b>reconstrução</b>, alternáveis nas abas do cabeçalho; '+
+    'o <b>reconhecimento federal</b> será incorporado para que o painel reflita todas as ações da SEDEC.</p>'+
+    (MODULO==='reconstrucao'
+      ? '<h4>O que muda na reconstrução</h4>'+
+        '<p>O pedido é um <b>plano de trabalho</b> (não um formulário de resposta), e o caminho tem duas '+
+        'etapas a mais do lado do ente: <b>licitar a obra</b> e <b>executá-la</b>. Por isso o gráfico de '+
+        'prazos traz <b>licitação</b> no lugar da liberação, e o repasse aparece <b>parcelado</b>. '+
+        'Há ainda uma situação sem equivalente na resposta: <b>sobrestado</b> — processo suspenso, que não '+
+        'é indeferimento nem desistência, e por isso é contado à parte.</p>'
+      : '')+
     '<h4>Base legal e normativa</h4>'+
     '<p>A SEDEC é o <b>órgão central do Sistema Nacional de Proteção e Defesa Civil (SINPDEC)</b>. '+
     'O aparato principal: <b>Lei nº 12.608/2012</b> (Política Nacional de Proteção e Defesa Civil e o '+
@@ -888,10 +982,13 @@ function modalSobre(){
     'O total mede a dificuldade de converter a necessidade em recurso; a decomposição preserva a '+
     'quem cabe cada etapa, sem atribuir a um a decisão do outro.</p>'+
     (N.ocp? '<h4>Operação Carro Pipa (OCP)</h4><div class="tcu-item">'+N.ocp+'</div>':'')+
+    (N.sobrestado? '<h4>Sobrestado</h4><div class="tcu-item">'+N.sobrestado+'</div>':'')+
+    (N.parcelas? '<h4>Repasse em parcelas</h4><p>'+N.parcelas+'</p>':'')+
+    (N.prazos? '<h4>Prazos</h4><p>'+N.prazos+'</p>':'')+
     (N.finalidade? '<h4>Finalidade (custeio × investimento)</h4><p>'+N.finalidade+'</p>':'')+
     (N.revisoes? '<p style="color:#8A9099;font-size:12px">'+N.revisoes+'</p>':'')+
     '<h4>Fonte e data</h4><p>'+META.fonte+'<br>Recorte deste piloto: '+META.recorte+'<br>'+
-    '<b>Reconhecimento federal</b> e <b>ações de reconstrução</b> estão em fase de elaboração.<br>'+
+    '<b>Reconhecimento federal</b> está em fase de elaboração.<br>'+
     'Consolidação gerada em '+dbr(META.data_geracao)+'.</p>'+
     '<p style="margin-top:14px;color:#8A9099;font-size:12px">Elaboração: Lincoln Duques de Barros — '+
     'Analista de Infraestrutura — SEDEC/MIDR. Protótipo em avaliação. Dados públicos.</p>';
@@ -902,7 +999,7 @@ function modalSobre(){
 function exportaCSV(){
   var f=filtra();
   var cols=['uf','mun','cd','rg','des','fac','fin','sit','fase','proc','prot',
-    'dcri','dsol','ddes','vsol','vlib','vcus','npes','gnd','fnt','tsol','tana','tlib','anl'];
+    'dcri','dsol','ddes','vsol','vlib','vcus','npes','gnd','fnt','tsol','tana',M().prazo3.k,'anl'];
   var head=cols.join(';');
   var linhas=f.map(function(p){ return cols.map(function(c){
     var v=p[c]==null?'':p[c]; if(typeof v==='string'&&/[;"\n]/.test(v)) v='"'+v.replace(/"/g,'""')+'"';
@@ -1036,14 +1133,15 @@ function exportaPDF(){
   var rec=recorteTexto();
   var f=filtra();
   document.getElementById('printHead').innerHTML=
-    '<div class="ph-sub"><b>Recorte:</b> '+rec+' · '+anoTxt()+' · Ações de resposta</div>'+
+    '<div class="ph-sub"><b>Recorte:</b> '+rec+' · '+anoTxt()+' · Ações de '+
+      (MODULO==='reconstrucao'?'reconstrução':'resposta')+'</div>'+
     '<div class="ph-sub">Fonte: '+META.fonte+' · Gerado em '+dbr(META.data_geracao)+'. '+
     'Detalhamento processo a processo disponível na exportação CSV.</div>';
   var terr = S.mun? (NOME_MUN[S.mun]||S.mun)+'/'+S.uf : S.uf? 'UF '+S.uf : S.regiao? 'Região '+S.regiao : 'Brasil';
   var mapaSVG=''; try{ mapaSVG=svgMapa(f); }catch(e){}
   document.getElementById('printDestaque').innerHTML=
     '<div class="pd-mapwrap">'+
-      '<div class="pd-maptit">'+terr+' · '+anoTxt()+' · ações de resposta</div>'+
+      '<div class="pd-maptit">'+terr+' · '+anoTxt()+' · '+M().rot+'</div>'+
       (mapaSVG||'<div style="color:#8A9099;font-size:11px">mapa indisponível</div>')+
       '<div class="pd-mapcap">'+rotMet(S.metMapa)+'</div>'+
     '</div>'+
@@ -1052,7 +1150,7 @@ function exportaPDF(){
       '<div class="pd-dest"><h4>Destaques do recorte</h4>'+
       document.getElementById('destaques').innerHTML+'</div></div>';
   var t0=document.title;
-  document.title='Transparencia_SEDEC_'+anoSlug()+'_'+slug(rec);
+  document.title='Transparencia_SEDEC_'+(MODULO==='reconstrucao'?'Reconstrucao_':'Resposta_')+anoSlug()+'_'+slug(rec);
   var restore=function(){ document.title=t0; window.removeEventListener('afterprint',restore); };
   window.addEventListener('afterprint',restore);
   setTimeout(function(){ [chUF,chPz,chSit,chDes,chTempo,chDevol].forEach(function(c){if(c)try{c.resize();}catch(e){}});
@@ -1130,7 +1228,10 @@ function ligaEventos(){
   expM.querySelectorAll('button').forEach(function(b){ b.onclick=function(){
     expM.classList.remove('on'); if(b.getAttribute('data-t')==='csv')exportaCSV(); else exportaPDF(); }; });
   document.getElementById('navSobre').onclick=function(e){e.preventDefault();modalSobre();};
-  document.getElementById('navRecon').onclick=function(e){e.preventDefault();};
+  // abas Resposta / Reconstrução trocam o módulo (o dado consolidado de cada frente)
+  document.querySelectorAll('nav a[data-mod]').forEach(function(a){
+    a.onclick=function(e){ e.preventDefault(); trocaModulo(a.getAttribute('data-mod')); };
+  });
   document.getElementById('navReconhec').onclick=function(e){e.preventDefault();};
   document.getElementById('modalFechar').onclick=fechaModal;
   document.getElementById('modalFundo').onclick=function(e){ if(e.target===this) fechaModal(); };
