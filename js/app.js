@@ -77,7 +77,11 @@ function carrega(){
     fetch('dados/uf.geojson').then(function(r){return r.json();})
   ]).then(function(res){
     DADOS=res[0].processos; META=res[0].meta; UFGEO=res[1]; ufFeats=UFGEO.features;
-    document.getElementById('subTit').textContent=META.subtitulo;
+    // a data da consolidação fica À VISTA no subtítulo: se o painel estiver
+    // servindo uma cópia velha (cache), isso salta aos olhos na hora
+    document.getElementById('subTit').innerHTML=META.subtitulo+
+      ' · <b title="Data em que as planilhas do S2iD foram consolidadas">dados de '+
+      dbr(META.data_geracao)+'</b>';
     indiceBusca();
     montaFiltros(); iniciaMapa(); ligaEventos(); render();
     rodape();

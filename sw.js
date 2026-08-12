@@ -8,7 +8,7 @@
    - domínios externos (tiles Esri/CARTO/OSM): não intercepta (rede padrão).
    Ao editar arquivos do painel, incremente CACHE para limpar o cache antigo. */
 'use strict';
-var CACHE = 'painel-transparencia-v8';
+var CACHE = 'painel-transparencia-v9';
 
 // itens do "app shell" pré-cacheados na instalação (tolerante a falhas individuais)
 var SHELL = [
@@ -16,7 +16,7 @@ var SHELL = [
   './index.html',
   './manifest.json',
   './css/estilo.css?v=26',
-  './js/app.js?v=28',
+  './js/app.js?v=29',
   './libs/leaflet.css',
   './libs/leaflet.js',
   './libs/echarts.min.js',
