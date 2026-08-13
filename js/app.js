@@ -39,6 +39,11 @@ var MODULOS={
     prazo3:null,
     temFase:false,
     semFin:true,           // troca o conjunto de KPIs (ver kpis())
+    // Um MESMO processo pode reconhecer centenas de municípios (reconhecimento
+    // coletivo). O prazo é propriedade da submissão, não de cada município: sem
+    // isto, 160 processos coletivos (0,8%) dominariam 52,8% da amostra e as
+    // medianas ficariam infladas (tsol 9d em vez de 11d).
+    prazoPorProcesso:true,
     grupos:{ sucesso:{reconhecido:1},
              dific:{somente_registro:1},        // o ente registrou mas não pediu
              indef:'nao_reconhecido' },         // negativa da União
@@ -49,6 +54,27 @@ var MODULOS={
 var MODULO='resposta';
 function M(){ return MODULOS[MODULO]; }
 
+var REG_UF={AC:'Norte',AP:'Norte',AM:'Norte',PA:'Norte',RO:'Norte',RR:'Norte',TO:'Norte',
+  AL:'Nordeste',BA:'Nordeste',CE:'Nordeste',MA:'Nordeste',PB:'Nordeste',PE:'Nordeste',
+  PI:'Nordeste',RN:'Nordeste',SE:'Nordeste',DF:'Centro-Oeste',GO:'Centro-Oeste',
+  MT:'Centro-Oeste',MS:'Centro-Oeste',ES:'Sudeste',MG:'Sudeste',RJ:'Sudeste',SP:'Sudeste',
+  PR:'Sul',RS:'Sul',SC:'Sul'};
+/* Reidrata o que o ETL omitiu para deixar o arquivo leve: textos longos e repetidos
+   (tipo de desastre, nome do município) vêm como ÍNDICE + vocabulário no meta, e os
+   campos constantes/deriváveis (situação, região, trilha) são reconstruídos aqui.
+   Assim o resto do código continua lendo p.des / p.mun / p.sit / p.rg normalmente. */
+function reidrata(){
+  var vd=META.vocab_des, vm=META.vocab_mun, lbl=GLBL;
+  if(!vd && !vm) return;
+  for(var i=0;i<DADOS.length;i++){
+    var p=DADOS[i];
+    if(vd && p.di!=null && p.des===undefined) p.des=vd[p.di];
+    if(vm && p.mi!=null && p.mun===undefined) p.mun=vm[p.mi];
+    if(p.sit===undefined) p.sit=lbl[p.grp]||p.grp;
+    if(p.rg===undefined) p.rg=REG_UF[p.uf]||'';
+    if(p.trilha===undefined) p.trilha='Reconhecimento';
+  }
+}
 /* FUNIL/GLBL são preenchidos a partir de meta.funil ao carregar cada módulo */
 var FUNIL=[], GLBL={};
 function montaFunil(){
@@ -125,7 +151,7 @@ function carrega(){
     fetch('dados/uf.geojson').then(function(r){return r.json();})
   ]).then(function(res){
     DADOS=res[0].processos; META=res[0].meta; UFGEO=res[1]; ufFeats=UFGEO.features;
-    montaFunil(); subtituloMod();
+    montaFunil(); reidrata(); subtituloMod();
     indiceBusca();
     montaFiltros(); iniciaMapa(); ligaEventos(); render();
     rodape();
@@ -148,7 +174,7 @@ function trocaModulo(novo){
   if(lo){ lo.style.display='flex'; lo.innerHTML='<span>Carregando '+M().nome+'…</span>'; }
   fetch(M().arq,{cache:'no-cache'}).then(function(r){return r.json();}).then(function(j){
     DADOS=j.processos; META=j.meta;
-    montaFunil(); subtituloMod();
+    montaFunil(); reidrata(); subtituloMod();
     // zera o recorte: os vocabulários (UF, desastre, anos) mudam entre módulos
     S={anos:[],dini:'',dfim:'',regiao:'',uf:'',mun:'',fase:'',fin:'',des:'',grupo:'',tq:'',
        metUF:S.metUF,metMapa:S.metMapa,metAcesso:S.metAcesso,sel:null,_scope:'br',
@@ -275,6 +301,21 @@ function agrupa(arr, chave){
   });
   return m;
 }
+/* série de um prazo, com um único valor por PROCESSO quando o módulo exigir
+   (reconhecimento coletivo) — evita que uma submissão conte centenas de vezes */
+function seriePrazo(arr, campo){
+  if(!M().prazoPorProcesso)
+    return arr.map(function(p){return p[campo];}).filter(function(x){return x!=null;});
+  var vis={}, out=[];
+  for(var i=0;i<arr.length;i++){
+    var p=arr[i], v=p[campo];
+    if(v==null) continue;
+    var k=p.proc||('#'+i);          // sem nº de processo, conta individualmente
+    if(vis[k]) continue;
+    vis[k]=1; out.push(v);
+  }
+  return out;
+}
 function sucessoDe(arr){ var S_=GSUC(); return arr.reduce(function(a,p){return a+(S_[p.grp]?1:0);},0); }
 function efetivaDe(arr){ var D_=GDIF(), sf=M().semFin;
   return arr.reduce(function(a,p){return a+(((sf||p.trilha==='Financeiro') && !D_[p.grp])?1:0);},0); }
@@ -366,8 +407,8 @@ function kpis(f){
   var ind=indefDe(f), sac=semacDe(f);            // indeferidos e composto "sem acesso"
   var vS=valSucDe(f), pAtend=pctValor(vS.vlib,vS.vsol);   // atendimento do valor pleiteado
   var porVal=(S.metAcesso==='v');
-  var medSol=mediana(f.map(function(p){return p.tsol;}));
-  var medAna=mediana(f.map(function(p){return p.tana;}));
+  var medSol=mediana(seriePrazo(f,'tsol'));
+  var medAna=mediana(seriePrazo(f,'tana'));
   var medLib=M().prazo3? mediana(f.map(function(p){return p[M().prazo3.k];})) : null;
   var nMun=Object.keys(f.reduce(function(a,p){if(p.cd)a[p.cd]=1;return a;},{})).length;
   // o 3º prazo é da SEDEC na Resposta (liberação) e do ENTE na Reconstrução
@@ -527,7 +568,7 @@ function graficosImpressao(){
 
 /* ---------- gráfico: prazos (mediana + p90, com referência legal) ---------- */
 function graficoPrazos(f){
-  function stat(campo){ var v=f.map(function(p){return p[campo];}).filter(function(x){return x!=null;});
+  function stat(campo){ var v=seriePrazo(f,campo);
     return {n:v.length, med:mediana(v), p90:pctl(v,.9), avg:media(v), max:v.length?Math.max.apply(null,v):null}; }
   var st=[stat('tsol'),stat('tana')];
   if(M().prazo3) st.push(stat(M().prazo3.k));
@@ -536,7 +577,7 @@ function graficoPrazos(f){
   var cats=['Solicitação\n(ente)','Análise\n(SEDEC)'];
   if(M().prazo3) cats.push(M().prazo3.lbl);
   // % das solicitações do ente dentro do prazo legal (90d nas outras frentes, 10d aqui)
-  var vsol=f.map(function(p){return p.tsol;}).filter(function(x){return x!=null;});
+  var vsol=seriePrazo(f,'tsol');
   var LIM=(META.prazo_legal_solic||PRAZO_SOLIC_LEGAL);
   var dentro=vsol.length? Math.round(100*vsol.filter(function(x){return x<=LIM;}).length/vsol.length):null;
   var el=document.getElementById('chartPrazos');
@@ -572,7 +613,10 @@ function graficoPrazos(f){
       '<b>p90</b> = 90% dos casos ficaram até esse valor (revela a cauda). '+
       'A <b>análise da SEDEC até a publicação no Diário Oficial não tem prazo legal expresso</b> — '+
       'é apresentada apenas de forma descritiva. Não há terceiro prazo nesta frente: o '+
-      'reconhecimento se encerra na publicação.';
+      'reconhecimento se encerra na publicação. '+
+      '<b>Nota:</b> um mesmo processo pode reconhecer vários municípios de uma vez; o prazo é '+
+      'contado <b>por processo</b> (uma submissão = um prazo), para que um pedido coletivo não '+
+      'pese como centenas.';
     return;
   }
   var recon=(MODULO==='reconstrucao');
@@ -987,7 +1031,7 @@ function narrativa(f){
   var suc=sucessoDe(f), efe=efetivaDe(f), dif=dificDe(f), fin=finDe(f);
   var ind=indefDe(f), sac=semacDe(f);
   var vS=valSucDe(f), pAtend=pctValor(vS.vlib,vS.vsol);
-  var medSol=mediana(f.map(function(p){return p.tsol;}));
+  var medSol=mediana(seriePrazo(f,'tsol'));
   var t='No recorte <b>'+esc+'</b>, '+(M().semFin?'foram registradas ':'foram registrados ')+
     '<b>'+nfmt(f.length)+'</b> '+(M().semFin?'ocorrências no ':'processos de ')+
     (MODULO==='reconstrucao'?'reconstrução':MODULO==='reconhecimento'?'reconhecimento':'resposta');
